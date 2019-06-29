@@ -218,16 +218,7 @@ Em seguida é mostrado o resultado da regressão logística sem o tratamento de 
 
 model_logistic <- train(
     
-    Diagnosis ~ radius_media 
-                + texture_media 
-                + perimeter_media 
-                + area_media
-                + smoothness_media  
-                + compactness_media 
-                + concavity_media  
-                + concave_points_media 
-                + symmetry_media
-                + fractal_dimension_media ,
+    Diagnosis ~ .,
     treino,
     metric = "ROC",
     method = "glm",
@@ -292,6 +283,95 @@ summary(model_logistic$finalModel)
 
 ```
 
+
+```{r}
+
+correlacoes <- cor(as.matrix(treino %>% select(-Diagnosis)))
+
+correlacoes_df <- as_tibble(correlacoes) 
+
+correlacoes_df <- correlacoes_df %>% 
+    bind_cols(tibble(coluna1 = names(correlacoes_df))) %>% 
+    gather( coluna2, correlacao, -coluna1  ) %>% 
+    filter(coluna1 != coluna2) %>% 
+    arrange(desc(correlacao)) %>% 
+    mutate(coluna1_menor = coluna1 < coluna2) %>% 
+    filter(coluna1_menor) %>% 
+    select(-coluna1_menor)
+
+pares_avaliacao <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.99 ) %>% 
+    rowwise() %>% 
+    mutate( ROC = c(1,2)  ) %T>% 
+    View()
+    
+
+    
+    
+    
+
+media_roc_formula <- function(formula, dados)
+{
+    model_logistic <- train(
+        
+        as.formula(formula),
+        dados,
+        metric = "ROC",
+        method = "glm",
+        trControl = controle,
+        preProcess = c( "center", "scale"),
+        family=binomial(link='logit')
+
+    )
+    
+    retorno <- model_logistic$resample %>%
+        select(-parameter) %>% 
+        gather(metrica, valor, -Resample) %>% 
+        group_by(metrica) %>% 
+        summarise(media = mean(valor)) %>% 
+        filter(metrica == "ROC") %>% 
+        pull(media)
+        
+
+    
+    list(retorno,2)
+    
+    
+        
+}
+
+
+    
+    
+    
+
+
+```
+
+```{r}
+
+
+var <-  "radius_media"
+
+model_logistic <- train(
+    
+    as.formula("Diagnosis ~ . -radius_media"),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+summary(model_logistic$finalModel)
+
+```
 
 
 

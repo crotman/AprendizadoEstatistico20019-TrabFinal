@@ -1,0 +1,169 @@
+---
+title: "Ajuste de Modelos"
+author: "Bruno Crotman"
+date: "26/05/2019"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+
+library(caret)
+library(tidyverse)
+library(scales)
+library(GGally)
+library(pROC)
+library(plotROC)
+library(xtable)
+library(knitr)
+
+
+dados <- read_csv("D:\\doutorado\\AprendizadoEstatistico\\wdbc.data", col_names = FALSE) %>% 
+    select(-X1) %>% 
+    rename(Diag = X2) %>% 
+    mutate(Diag = as.factor(Diag))
+
+
+set.seed(69)
+
+
+rows <- sample(nrow(dados))
+
+dados <- dados[rows,]
+
+split <- round(nrow(dados) * .75 )
+
+treino <- dados[1:split, ]
+
+teste <- dados[(split + 1):nrow(dados), ]
+
+
+
+
+```
+
+
+## Dados utilizados
+
+
+Os dados utilizados vieram do site [UCI Machine Learning Repository - Breast Cancer Wisconsin (Diagnostic) Data Set](https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+(Diagnostic))
+
+A base contém `r nrow(dados)`, com `r ncol(dados)` variáveis, sendo uma delas o diagnóstico de benigno ou maligno.
+
+
+
+
+## Conjuntos Treino e Teste
+
+
+
+A base foi dividida aleatoriamente em dados de teste e dados de treino. Os dados de teste foram separados no início dos trabalhos e nâo foram tocados durante a análise.
+
+Os dados de treino e teste perfazem, respectivamente, `r    percent(nrow(treino)/nrow(dados), decimal.mark = ",")` e `r percent(nrow(teste)/nrow(dados) , decimal.mark = "," )` do total.
+
+
+## Correlações
+
+
+
+
+```{r warning=FALSE }
+
+ggcorr(treino) +
+    ggtitle("Correlações", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
+
+```
+
+
+
+## Regressão logística
+
+
+Em seguida é mostrado o resultado da regressão logística sem o tratamento de redução de dimensionalidade PCA.
+
+O modelo é testado em esquema 10-Fold-validation
+
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+
+folds <- createFolds(treino$Diag, k = 10 )
+
+controle <- trainControl(
+    
+    summaryFunction = twoClassSummary,
+    classProbs = TRUE,
+    verboseIter = FALSE,
+    index = folds, 
+    returnResamp = "all",
+    returnData = TRUE,
+    savePredictions = "all",
+    
+    
+    
+)
+
+
+model_logistic <- train(
+    
+    Diag ~ . ,
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle,
+    preProcess = c( "center", "scale")
+    
+
+)
+
+
+
+ggplot(model_logistic$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+
+
+```
+
+
+
+
+```{r}
+
+model_logistic$resample %>% 
+    select(-parameter) %>%
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+
+
+```
+
+
+
+```{r}
+
+model_logistic$resample %>%
+    select(-parameter) %>% 
+    gather(metrica, valor, -Resample) %>% 
+    group_by(metrica) %>% 
+    summarise(media = mean(valor), sd = sd(valor)) %>% 
+    rename("Métrica" = metrica, "Média" = media, "Desvio-padrão" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+    
+
+
+
+
+```
+
+
+
+
+
+
+

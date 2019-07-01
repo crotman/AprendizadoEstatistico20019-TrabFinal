@@ -199,9 +199,9 @@ controle_cv <- trainControl(
     repeats = 10,
     returnData = TRUE,
     savePredictions = "all",
-    method = "repeatedcv"
+    method = "repeatedcv",
     #,
-    # allowParallel = TRUE,
+    allowParallel = FALSE,
     # seeds = 1:41
     
 
@@ -1139,7 +1139,7 @@ ggplot(model_logistic_sem_correlacionadas_60$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r,cache=TRUE}
 
 result_model_logistic_60 <-  model_logistic_sem_correlacionadas_60$resample %>% 
     select(Resample, ROC) %>%
@@ -1151,7 +1151,7 @@ result_model_logistic_60 %>%
     kable( caption = "Métricas para cada Fold")
 ```
 
-```{r}
+```{r, cache=TRUE   }
 
 
 
@@ -1168,7 +1168,7 @@ Além de melhorar a performance (viés) do do modelo, a especificação sem as v
 
 
 
-```{r}
+```{r,cache=TRUE}
 
 
 summary(model_logistic_sem_correlacionadas_60$finalModel)
@@ -1181,7 +1181,7 @@ Agora lasso
 
 
 
-```{r}
+```{r, cache = TRUE}
 
 
 set.seed(13)
@@ -1224,7 +1224,7 @@ resultados_net
 
 
 
-```{r}
+```{r, cache = TRUE}
 
 
 
@@ -1270,7 +1270,7 @@ resultados_net
 
 
 
-```{r}
+```{r, cache=TRUE}
 
 
 
@@ -1345,51 +1345,51 @@ resultados_tree
 
 ```{r}
 
-
-sensibilidades <- tibble(sensibilidade = c(0.3))
-
-
-metricas <- model_logistic_sem_correlacionadas_80$pred %>% 
-    crossing(sensibilidades) %>%
-    mutate(pred_sens = if_else(M >= sensibilidade, "M", "B" )) %>% 
-    group_by(sensibilidade, Resample) %>% 
-    summarise(  TP = sum(obs == "M" & pred == "M"), 
-                P = sum(obs == "M")  ,
-                TN = sum(obs == "B" & pred == "B"),
-                N = sum(obs == "B")
-                
-                ) %>% 
-    mutate(Sens= TP/P) %>% 
-    View()
-    
+# 
+# sensibilidades <- tibble(sensibilidade = c(0.3))
+# 
+# 
+# metricas <- model_logistic_sem_correlacionadas_80$pred %>% 
+#     crossing(sensibilidades) %>%
+#     mutate(pred_sens = if_else(M >= sensibilidade, "M", "B" )) %>% 
+#     group_by(sensibilidade, Resample) %>% 
+#     summarise(  TP = sum(obs == "M" & pred == "M"), 
+#                 P = sum(obs == "M")  ,
+#                 TN = sum(obs == "B" & pred == "B"),
+#                 N = sum(obs == "B")
+#                 
+#                 ) %>% 
+#     mutate(Sens= TP/P) %>% 
+#     View()
 #     
-# model_logistic_sem_correlacionadas_80$resample %>% 
-#     select(-parameter) %>%
-#     mutate_if(is.numeric, percent) %>% 
-#     kable( caption = "Métricas para cada Fold")
-    
-ggplot(model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1"), aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = TRUE, cutoffs.at = c(0.5, 0.4, 0.3)  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
-    
-fold <- model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1")
-
-teste <- roc(fold$obs, fold$M)
-
-summary(teste)
-
-
-
-teste$sensitivities
-
-teste$thresholds
-
-teste$specificities
-
-teste$auc
-
-model_logistic_sem_correlacionadas_80$resample %>% filter(Resample == "Fold1.Rep1")
+# #     
+# # model_logistic_sem_correlacionadas_80$resample %>% 
+# #     select(-parameter) %>%
+# #     mutate_if(is.numeric, percent) %>% 
+# #     kable( caption = "Métricas para cada Fold")
+#     
+# ggplot(model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1"), aes(m = M, d = obs, color = Resample )) +
+#     geom_roc( labels = TRUE, cutoffs.at = c(0.5, 0.4, 0.3)  ) +
+#     coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+# 
+#     
+# fold <- model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1")
+# 
+# teste <- roc(fold$obs, fold$M)
+# 
+# summary(teste)
+# 
+# 
+# 
+# teste$sensitivities
+# 
+# teste$thresholds
+# 
+# teste$specificities
+# 
+# teste$auc
+# 
+# model_logistic_sem_correlacionadas_80$resample %>% filter(Resample == "Fold1.Rep1")
 
 ```
 

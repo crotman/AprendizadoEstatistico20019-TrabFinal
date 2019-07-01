@@ -36,15 +36,17 @@ dados <- read_csv("wdbc.csv") %>%
     rename("fractal_dimension-media" = "fractal_dimension-meia") %>% 
     rename_all( .funs = ~str_replace(.,"-","_")   ) %>% 
     rename_all( .funs = ~str_replace(.," ","_")   ) %>% 
-    mutate(Diagnosis = as.factor(Diagnosis))
+    mutate(Diagnosis = as.factor(Diagnosis)) 
 
 
 set.seed(13)
 
 
+
 rows <- sample(nrow(dados))
 
 dados <- dados[rows,]
+
 
 split <- round(nrow(dados) * .70 )
 
@@ -179,25 +181,30 @@ ggpairs(dps ) +
 
 
 
-O modelo é testado em esquema 10-Fold-validation
+O modelo é testado em esquema 4-Fold-validation repetido 5 vezes, para melhor avaliação da variância do modelo
 
 ```{r}
 
+set.seed(13)
 
-folds <- createFolds(treino$Diagnosis, k = 10 )
 
-controle <- trainControl(
+controle_cv <- trainControl(
     
     summaryFunction = twoClassSummary,
     classProbs = TRUE,
     verboseIter = FALSE,
-    index = folds, 
+    #index = folds, 
     returnResamp = "all",
+    number = 4,
+    repeats = 10,
     returnData = TRUE,
     savePredictions = "all",
+    method = "repeatedcv"
+    #,
+    # allowParallel = TRUE,
+    # seeds = 1:41
     
-    
-    
+
 )
 
 
@@ -216,15 +223,19 @@ Em seguida é mostrado o resultado da regressão logística sem o tratamento de 
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 
+
+
+
 model_logistic <- train(
     
-    Diagnosis ~ .,
+    Diagnosis ~ . ,
     treino,
     metric = "ROC",
     method = "glm",
-    trControl = controle,
+    trControl = controle_cv,
     preProcess = c( "center", "scale"),
     family=binomial(link='logit')
+    
     
 
 )
@@ -233,7 +244,7 @@ model_logistic <- train(
 
 ggplot(model_logistic$pred, aes(m = M, d = obs, color = Resample )) +
     geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )+ style_roc()
 
 
 
@@ -246,25 +257,27 @@ ggplot(model_logistic$pred, aes(m = M, d = obs, color = Resample )) +
 ```{r}
 
 
-model_logistic$resample %>% 
-    select(-parameter) %>%
+result_model_logistic <-  model_logistic$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic %>% 
     mutate_if(is.numeric, percent) %>% 
     kable( caption = "Métricas para cada Fold")
 
 
-
 ```
+
+Vemos um resultado com  viés e variância ruins
 
 
 ```{r}
 
 
-model_logistic$resample %>%
-    select(-parameter) %>% 
-    gather(metrica, valor, -Resample) %>% 
-    group_by(metrica) %>% 
-    summarise(media = mean(valor), sd = sd(valor)) %>% 
-    rename("Métrica" = metrica, "Média" = media, "Desvio-padrão" = sd) %>% 
+result_model_logistic %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
     kable()
     
@@ -273,19 +286,23 @@ model_logistic$resample %>%
 ```
 
 
+O modelo final mostra que nenhum coeficiente tem significado estatístico. Isso pode ser um efeito colateral de um número muito grande de variáveis explicativas.
 
 
 ```{r}
 
 
-summary(model_logistic$finalModel)
+summary(model_logistic)
+
 
 
 ```
 
+Existem alguns pares de variáveis extremamente correlacionados. A chance de que seja necessário ter as duas variáveis é pequena. 
+
+
 
 ```{r}
-
 correlacoes <- cor(as.matrix(treino %>% select(-Diagnosis)))
 
 correlacoes_df <- as_tibble(correlacoes) 
@@ -299,54 +316,259 @@ correlacoes_df <- correlacoes_df %>%
     filter(coluna1_menor) %>% 
     select(-coluna1_menor)
 
-pares_avaliacao <- correlacoes_df %>% 
-    mutate(par = row_number()) %>% 
-    gather(variavel, valor,-correlacao, -par  ) %>% 
-    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
-    filter(correlacao > 0.99 ) %>% 
-    rowwise() %>% 
-    mutate( ROC = c(1,2)  ) %T>% 
-    View()
-    
+correlacoes_df
 
-    
-    
-    
 
+```
+
+
+```{r}
 media_roc_formula <- function(formula, dados)
 {
+    
+    set.seed(13)
+    
+    
+    
+    
     model_logistic <- train(
-        
+
         as.formula(formula),
         dados,
         metric = "ROC",
         method = "glm",
-        trControl = controle,
+        trControl = controle_cv,
         preProcess = c( "center", "scale"),
         family=binomial(link='logit')
+        
 
     )
-    
-    retorno <- model_logistic$resample %>%
-        select(-parameter) %>% 
-        gather(metrica, valor, -Resample) %>% 
-        group_by(metrica) %>% 
-        summarise(media = mean(valor)) %>% 
-        filter(metrica == "ROC") %>% 
-        pull(media)
-        
 
+    retorno <- model_logistic$resample %>%
+        select(-parameter) %>%
+        gather(metrica, valor, -Resample) %>%
+        group_by(metrica) %>%
+        summarise(media = mean(valor), dp = sd(valor) ) %>%
+        filter(metrica == "ROC")
     
-    list(retorno,2)
-    
-    
-        
+    media <- retorno %>% pull(media)
+    dp <- retorno %>% pull(dp)
+
+    list(media,dp)
+
+
 }
 
+```
+
+
+
+Para cada par de variáveis mais correlacionadas $x_i, x_j$ , vamos testar um modelo sem a variável $x_i$ e outro sem a variável $x_j$. A variável que participar do modelo de pior resultado é marcada para exclusão.
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.95 ) 
+
+
+
+result_pares_avaliacao <- pares_avaliacao %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result <-  pares_avaliacao %>% 
+    bind_cols(result_pares_avaliacao) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result)
+    
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+set.seed(13)
+
+
+
+formula_sem_variaveis <- pares_avaliacao_com_result %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas <- train(
+    
+    as.formula(formula_sem_variaveis),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
 
     
+
+
+
+```
+
+
+
+```{r}
+
+
+result_model_logistic_sem_corr <-  model_logistic_sem_correlacionadas$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_sem_corr %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+
+```
+
+```{r}
+
+
+
+
+result_model_logistic_sem_corr %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas$finalModel)
+
+```
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_90 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.90 ) 
+
+
+
+result_pares_avaliacao_90 <- pares_avaliacao_90 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_90 <-  pares_avaliacao_90 %>% 
+    bind_cols(result_pares_avaliacao_90) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_90)
     
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+set.seed(13)
+
+formula_sem_variaveis_90 <- pares_avaliacao_com_result_90 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
     
+model_logistic_sem_correlacionadas_90 <- train(
+    
+    as.formula(formula_sem_variaveis_90),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas_90$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
+
+```
+
+
+
+```{r}
+
+result_model_logistic_sem_corr_90 <-  model_logistic_sem_correlacionadas_90$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+result_model_logistic_sem_corr_90 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+
 
 
 ```
@@ -354,25 +576,822 @@ media_roc_formula <- function(formula, dados)
 ```{r}
 
 
-var <-  "radius_media"
 
-model_logistic <- train(
+result_model_logistic_sem_corr_90 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_90$finalModel)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_85 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.85 ) 
+
+
+
+result_pares_avaliacao_85 <- pares_avaliacao_85 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_85 <-  pares_avaliacao_85 %>% 
+    bind_cols(result_pares_avaliacao_85) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_85)
     
-    as.formula("Diagnosis ~ . -radius_media"),
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+set.seed(13)
+
+formula_sem_variaveis_85 <- pares_avaliacao_com_result_85 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas_85 <- train(
+    
+    as.formula(formula_sem_variaveis_85),
     treino,
     metric = "ROC",
     method = "glm",
-    trControl = controle,
+    trControl = controle_cv,
     preProcess = c( "center", "scale"),
     family=binomial(link='logit')
     
 
 )
 
-summary(model_logistic$finalModel)
+
+
+ggplot(model_logistic_sem_correlacionadas_85$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
 
 ```
 
+
+
+```{r}
+
+result_model_logistic_85 <-  model_logistic_sem_correlacionadas_85$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_85 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+
+```
+
+```{r}
+
+
+
+
+
+result_model_logistic_85 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_85$finalModel)
+
+```
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_80 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.80 ) 
+
+
+
+result_pares_avaliacao_80 <- pares_avaliacao_80 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_80 <-  pares_avaliacao_80 %>% 
+    bind_cols(result_pares_avaliacao_80) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_80)
+    
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+set.seed(13)
+
+formula_sem_variaveis_80 <- pares_avaliacao_com_result_80 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas_80 <- train(
+    
+    as.formula(formula_sem_variaveis_80),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas_80$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
+
+```
+
+
+
+```{r}
+
+result_model_logistic_80 <-  model_logistic_sem_correlacionadas_80$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_80 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+
+```
+
+```{r}
+
+
+
+
+result_model_logistic_80 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_80$finalModel)
+
+```
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_75 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.75 ) 
+
+
+
+result_pares_avaliacao_75 <- pares_avaliacao_75 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_75 <-  pares_avaliacao_75 %>% 
+    bind_cols(result_pares_avaliacao_75) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_75)
+    
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+formula_sem_variaveis_75 <- pares_avaliacao_com_result_75 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas_75 <- train(
+    
+    as.formula(formula_sem_variaveis_75),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas_75$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
+
+```
+
+
+
+```{r}
+
+result_model_logistic_75 <-  model_logistic_sem_correlacionadas_75$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_75 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+```
+
+```{r}
+
+
+
+result_model_logistic_75 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_75$finalModel)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_70 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.70 ) 
+
+
+
+result_pares_avaliacao_70 <- pares_avaliacao_70 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_70 <-  pares_avaliacao_70 %>% 
+    bind_cols(result_pares_avaliacao_70) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_70)
+    
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+formula_sem_variaveis_70 <- pares_avaliacao_com_result_70 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas_70 <- train(
+    
+    as.formula(formula_sem_variaveis_70),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas_70$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
+
+```
+
+
+
+```{r}
+
+result_model_logistic_70 <-  model_logistic_sem_correlacionadas_70$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_70 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+```
+
+```{r}
+
+
+
+result_model_logistic_70 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_70$finalModel)
+
+```
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+pares_avaliacao_60 <- correlacoes_df %>% 
+    mutate(par = row_number()) %>% 
+    gather(variavel, valor,-correlacao, -par  ) %>% 
+    mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
+    filter(correlacao > 0.50 ) 
+
+
+
+result_pares_avaliacao_60 <- pares_avaliacao_60 %>%  
+    rowwise() %>% 
+    do( resultado = media_roc_formula(.$formula, treino)    ) %>% 
+    as.tibble() 
+
+pares_avaliacao_com_result_60 <-  pares_avaliacao_60 %>% 
+    bind_cols(result_pares_avaliacao_60) %>% 
+    unnest() %>% 
+    mutate(indice =  if_else((row_number()-1) %% 2   == 0,"media","dp" )) %>% 
+    spread(indice, resultado) %>% 
+    mutate(media = unlist(media)) %>% 
+    select(par, correlacao, valor, formula, media, dp ) %>% 
+    group_by(par) %>% 
+    mutate(maior_media = max(media)) %>% 
+    mutate(exclui = media != maior_media ) %>% 
+    ungroup() %>% 
+    arrange(par, desc(media))
+
+
+kable(pares_avaliacao_com_result_60)
+    
+```
+
+Modelo sem as variáveis altamente correlacionadas
+
+
+```{r cache=TRUE}
+
+formula_sem_variaveis_60 <- pares_avaliacao_com_result_60 %>%
+    filter(exclui) %>% 
+    select(valor) %>% 
+    summarise(valor = paste0(" Diagnosis ~ . -",str_flatten(valor, collapse = " -"))) %>% 
+    unlist()
+    
+model_logistic_sem_correlacionadas_60 <- train(
+    
+    as.formula(formula_sem_variaveis_60),
+    treino,
+    metric = "ROC",
+    method = "glm",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    family=binomial(link='logit')
+    
+
+)
+
+
+
+ggplot(model_logistic_sem_correlacionadas_60$pred, aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = FALSE  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+
+
+
+```
+
+
+
+```{r}
+
+result_model_logistic_60 <-  model_logistic_sem_correlacionadas_60$resample %>% 
+    select(Resample, ROC) %>%
+    rename(AUC = ROC) 
+
+
+result_model_logistic_60 %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable( caption = "Métricas para cada Fold")
+```
+
+```{r}
+
+
+
+result_model_logistic_60 %>%     
+    summarise(media = mean(AUC), sd = sd(AUC)) %>% 
+    rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
+    mutate_if(is.numeric, percent) %>% 
+    kable()
+
+```
+
+Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
+
+
+
+
+```{r}
+
+
+summary(model_logistic_sem_correlacionadas_60$finalModel)
+
+```
+
+
+
+Agora lasso
+
+
+
+```{r}
+
+
+set.seed(13)
+
+model_net <- train(
+    
+    Diagnosis ~ .,
+    treino,
+    metric = "ROC",
+    method = "glmnet",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    tuneGrid = expand.grid(
+         alpha = c(0,0.5,0.75,0.1,0.125,0.15,0.25,0.5, 1),
+         lambda = 0:10/500
+     )    
+    
+
+)
+
+
+plot(model_net)
+
+
+resultados_net <- model_net$resample %>% 
+    group_by(alpha, lambda) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+resultados_net
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+
+
+set.seed(13)
+
+model_net <- train(
+    
+    as.formula(formula_sem_variaveis_60),
+    treino,
+    metric = "ROC",
+    method = "glmnet",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    tuneGrid = expand.grid(
+         alpha = c(0,0.5,0.75,0.1,0.125,0.15,0.25,0.5, 1),
+         lambda = 0:10/500
+     )    
+    
+
+)
+
+
+plot(model_net)
+
+
+resultados_net <- model_net$resample %>% 
+    group_by(alpha, lambda) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+resultados_net
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+model_ranger <- train(
+    
+    Diagnosis  ~ .,
+    treino,
+    metric = "ROC",
+    method = "ranger",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    verbose = TRUE
+
+
+)
+
+
+
+
+resultados_ranger <- model_ranger$resample %>% 
+    group_by(mtry, splitrule) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+resultados_ranger
+
+
+
+
+```
+
+```{r}
+
+
+
+
+
+model_tree <- train(
+    
+    Diagnosis  ~ .,
+    treino,
+    metric = "ROC",
+    method = "rpart",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale")
+
+
+)
+
+plot(model_tree$finalModel)
+
+
+
+resultados_tree <- model_tree$resample %>% 
+    group_by(cp) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+resultados_tree
+
+
+
+
+
+```
+
+
+
+```{r}
+
+
+sensibilidades <- tibble(sensibilidade = c(0.3))
+
+
+metricas <- model_logistic_sem_correlacionadas_80$pred %>% 
+    crossing(sensibilidades) %>%
+    mutate(pred_sens = if_else(M >= sensibilidade, "M", "B" )) %>% 
+    group_by(sensibilidade, Resample) %>% 
+    summarise(  TP = sum(obs == "M" & pred == "M"), 
+                P = sum(obs == "M")  ,
+                TN = sum(obs == "B" & pred == "B"),
+                N = sum(obs == "B")
+                
+                ) %>% 
+    mutate(Sens= TP/P) %>% 
+    View()
+    
+#     
+# model_logistic_sem_correlacionadas_80$resample %>% 
+#     select(-parameter) %>%
+#     mutate_if(is.numeric, percent) %>% 
+#     kable( caption = "Métricas para cada Fold")
+    
+ggplot(model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1"), aes(m = M, d = obs, color = Resample )) +
+    geom_roc( labels = TRUE, cutoffs.at = c(0.5, 0.4, 0.3)  ) +
+    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
+
+    
+fold <- model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1")
+
+teste <- roc(fold$obs, fold$M)
+
+summary(teste)
+
+
+
+teste$sensitivities
+
+teste$thresholds
+
+teste$specificities
+
+teste$auc
+
+model_logistic_sem_correlacionadas_80$resample %>% filter(Resample == "Fold1.Rep1")
+
+```
 
 
 <!-- \section{Algoritmo Gale-Shapley} -->

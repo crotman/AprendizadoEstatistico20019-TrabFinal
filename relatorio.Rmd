@@ -26,6 +26,7 @@ library(pROC)
 library(plotROC)
 library(xtable)
 library(knitr)
+library(magrittr)
 
 
 dados <- read_csv("wdbc.csv") %>% 
@@ -1232,9 +1233,9 @@ resultados_net
 
 set.seed(13)
 
-model_net <- train(
+model_net_sem <- train(
     
-    as.formula(formula_sem_variaveis_60),
+    as.formula(formula_sem_variaveis_70),
     treino,
     metric = "ROC",
     method = "glmnet",
@@ -1252,7 +1253,7 @@ model_net <- train(
 plot(model_net)
 
 
-resultados_net <- model_net$resample %>% 
+resultados_net_sem <- model_net$resample %>% 
     group_by(alpha, lambda) %>% 
     summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
     arrange(desc(media)) %>% 
@@ -1260,7 +1261,7 @@ resultados_net <- model_net$resample %>%
 
 
 
-resultados_net
+resultados_net_sem
 
 
 
@@ -1333,13 +1334,278 @@ resultados_tree <- model_tree$resample %>%
     rename("Média AUC" = media)
 
 
-resultados_tree
+
+resultados_modelo <- function(modelo)
+{
+    res <- modelo$resample %>% 
+        select(-Sens, -Spec) %>% 
+        group_by_at(vars(-ROC, -Resample)) %>% 
+        summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+        arrange(desc(media)) %>% 
+        rename("Média AUC" = media)
+    
+    res
+    
+}
+
+
+
 
 
 
 
 
 ```
+
+
+
+```{r}
+
+
+
+set.seed(13)
+
+model_net_pca <- train(
+    
+    Diagnosis ~ .,
+    treino,
+    metric = "ROC",
+    method = "glmnet",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale", "pca"),
+    tuneGrid = expand.grid(
+         alpha = c(0,0.5,0.75,0.1,0.125,0.15,0.25,0.5, 1),
+         lambda = 0:10/500
+     )    
+    
+
+)
+
+
+plot(model_net_pca)
+
+
+resultados_net_pca <- model_net$resample %>% 
+    group_by(alpha, lambda) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+resultados_net_pca
+
+
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+
+
+set.seed(13)
+
+model_gamboost <- train(
+    
+    Diagnosis ~ .,
+    treino,
+    metric = "ROC",
+    method = "gamboost",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    tuneGrid = expand.grid(
+          mstop = c(200, 300, 400, 500),
+          prune = c("yes")
+          
+      )    
+    
+
+)
+
+
+plot(model_gamboost)
+
+
+resultados_gamboost <- model_gamboost$resample %>% 
+    group_by(mstop, prune) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+resultados_gamboost
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+```{r, cache= TRUE}
+
+
+
+set.seed(13)
+
+model_svm <- train(
+    
+    Diagnosis ~ .,
+    treino,
+    metric = "ROC",
+    method = "svmRadialWeights",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    tuneGrid = expand.grid(
+        C = c(.5, 1, 2, 3, 4, 5, 6, 7, 8),
+        sigma = c( .15, .01, 0.005, 0.001),
+        Weight = 2
+          
+      )    
+)
+
+
+plot(model_svm)
+
+
+resultados_svm <- model_svm$resample %>% 
+    group_by(C, sigma) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+resultados_svm
+
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+resultados_modelo(model_logistic_sem_correlacionadas_70) 
+
+resultados_modelo(model_net) 
+
+resultados_modelo(model_ranger) 
+
+resultados_modelo(model_gamboost)
+
+resultados_modelo(model_svm)
+
+
+
+```
+
+
+
+
+```{r}
+
+
+medias_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(mean) %>% 
+    gather(variavel, media) 
+
+dps_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(sd) %>% 
+    gather(variavel, dp) 
+
+mediana_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(median) %>% 
+    gather(variavel, mediana) 
+
+
+variaveis <- medias_treino %>% 
+    select(variavel)
+
+caso_media <- medias_treino %>% 
+    spread(variavel, media)
+
+
+quantis <- treino %>% 
+    select(-Diagnosis) %>% 
+    gather(variavel, valor) %>% 
+    crossing( tibble( q = seq(0,1, 0.05))   ) %>% 
+    group_by(variavel,q ) %>% 
+    summarise( valor = quantile(valor, mean(q))) 
+    
+
+casos <- variaveis %>% 
+    crossing(variaveis) %>% 
+    rename(fixa = variavel1) %>% 
+    crossing(tibble( q = seq(0,1, 0.05)) ) %>% 
+    arrange(q, variavel, fixa) %>% 
+    mutate(caso = (row_number()-1) %/% nrow(variaveis) + 1) %>% 
+    mutate(q_cada_variavel = if_else(variavel == fixa, q, 0.5 )) %>% 
+    inner_join(quantis, by=c("q_cada_variavel" = "q", "fixa" = "variavel") ) %>%
+    select(-q_cada_variavel) %>% 
+    spread(fixa, valor)
+    
+prev_boost <- predict(model_gamboost, casos, type = "prob") %>% 
+    mutate(modelo = "boost") %>% 
+    bind_cols(casos)
+
+prev_svm <- predict(model_svm, casos, type = "prob") %>% 
+    mutate(modelo = "svm") %>% 
+    bind_cols(casos)
+
+prev_ranger <- predict(model_ranger, casos, type = "prob") %>% 
+    mutate(modelo = "ranger") %>% 
+    bind_cols(casos)
+
+prev_log_sem <- predict(model_logistic_sem_correlacionadas_70, casos, type = "prob") %>% 
+    mutate(modelo = "logist sem") %>% 
+    bind_cols(casos)
+
+prev_log_net <- predict(model_net, casos, type = "prob") %>% 
+    mutate(modelo = "logist net") %>% 
+    bind_cols(casos)
+
+
+prev <- 
+    bind_rows(prev_svm, prev_boost, prev_ranger, prev_log_sem, prev_log_net)
+
+
+
+prev %>% 
+    ggplot() +
+    geom_line( aes(x = q, y = M, color = modelo) ) +
+    facet_wrap( ~variavel)
+    
+
+
+```
+
+
 
 
 

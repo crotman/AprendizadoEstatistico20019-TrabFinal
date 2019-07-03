@@ -1505,6 +1505,13 @@ resultados_svm
 
 
 
+
+
+
+
+
+
+
 ```{r}
 
 
@@ -1519,6 +1526,71 @@ resultados_modelo(model_gamboost)
 resultados_modelo(model_svm)
 
 
+
+```
+
+
+
+```{r}
+
+
+
+pred_logistic <- model_logistic_sem_correlacionadas_70$pred %>% 
+    semi_join(model_logistic_sem_correlacionadas_70$bestTune) %>% 
+    mutate(modelo = "logist sem")
+
+pred_net <- model_net$pred %>% 
+    semi_join(model_net$bestTune) %>% 
+    mutate(modelo = "logist net")
+    
+pred_svm <- model_svm$pred %>% 
+    semi_join(model_svm$bestTune) %>% 
+    mutate(modelo = "svm")
+
+pred_boost <- model_gamboost$pred %>% 
+    semi_join(model_gamboost$bestTune) %>% 
+    mutate(modelo = "boost") 
+
+pred_ranger <- model_ranger$pred %>% 
+    semi_join(model_ranger$bestTune) %>% 
+    mutate(modelo = "ranger")
+
+
+pred_ensemble_todos <- bind_rows(pred_logistic, pred_net, pred_boost, pred_ranger, pred_svm )
+
+
+
+pred_ensemble_mediana <- pred_ensemble_todos %>% 
+    separate(Resample, c("Fold", "Repeat")) %>% 
+    group_by(Repeat, rowIndex) %>% 
+    summarise(M = median(M), B= median(B), n = n(), obs = unique(obs)) 
+
+
+
+ret_roc <- function(data)
+{
+    roc(data$obs,data$M)
+}
+
+
+ret_roc_auc <- function(data)
+{
+    unlist(as.numeric(roc(data$obs,data$M)$auc))
+}
+
+
+pred_ensemble_mediana_foldado <- model_ranger$pred %>% 
+    semi_join(model_ranger$bestTune) %>% 
+    separate(Resample, c("Fold", "Repeat")) %>% 
+    select(Fold, Repeat, rowIndex) %>% 
+    inner_join(pred_ensemble_mediana, by = c("Repeat", "rowIndex"), suffix = c("","_") )  %>% 
+    group_by(Fold, Repeat) %>% 
+    nest() %>% 
+    mutate( roc = map(data, ret_roc), auc = unlist(map(data, ret_roc_auc))  )
+
+mean(pred_ensemble_mediana_foldado$auc)
+
+sd(pred_ensemble_mediana_foldado$auc)
 
 ```
 
@@ -1639,10 +1711,10 @@ prev %>%
 #     coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
 # 
 #     
-# fold <- model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1")
-# 
-# teste <- roc(fold$obs, fold$M)
-# 
+ fold <- model_logistic$pred %>% filter(Resample == "Fold1.Rep01")
+ 
+ teste <- roc(fold$obs, fold$M)
+ 
 # summary(teste)
 # 
 # 

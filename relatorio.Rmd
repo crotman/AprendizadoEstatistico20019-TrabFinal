@@ -6,6 +6,7 @@ header-includes:
 - \usepackage[portuguese]{babel}
 output: 
     pdf_document:
+        toc: true
         number_sections: true
         fig_caption: yes
 
@@ -79,15 +80,28 @@ options(OutDec = ",")
 
 Os dados utilizados vieram do site [UCI Machine Learning Repository - Breast Cancer Wisconsin (Diagnostic) Data Set](https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+(Diagnostic))
 
-A base contém `r nrow(dados)`, com `r ncol(dados)` variáveis, sendo uma delas o diagnóstico de benigno ou maligno.
+A base contém `r nrow(dados)` casos, com `r ncol(dados)` variáveis, sendo uma delas o diagnóstico de benigno ou maligno.
+
 
 \section{Conjuntos Treino e Teste}
 
 
-Já antes o início da análise, a base foi dividida aleatoriamente em dados de teste e dados de treino. Os dados de teste não foram tocados durante nenhuma parte da análise. Apenas na avaliação final dos modelos.
+Já antes do início da análise, a base foi dividida aleatoriamente em dados de teste e dados de treino. Os dados de teste não foram tocados durante nenhuma parte da análise. Apenas na avaliação final dos modelos, na Seção \ref{aval}.
 
 Os dados de treino e teste constituem, respectivamente, `r    percent(nrow(treino)/nrow(dados), decimal.mark = ",", accuracy = 1)` e `r percent(nrow(teste)/nrow(dados) , decimal.mark = ",", accuracy = 1 )` do total.
 
+
+\section{Exploração da base}
+
+Foi realizada uma pequena exploração da base a fim de tentar encontrar padrões que saltassem aos olhos.
+
+
+Por conta do grande número de variáveis, elas foram divididas em três grupos de dez. As variáveis que representam médias foram agrupadas em um conjunto, assim como as variáveis que representam desvios-padrão em outro grupo e as que representam piores medidas em ainda outro grupo.
+
+As Figuras \ref{fig:corr_medias}, \ref{fig:corr_piores} e \ref{fig:corr_dp} apresentam as correlações entre as variáveis de cada grupo. É possível notar que existe uma correlação positiva relevante entre muitas das variáveis, sugerindo a possibilidade da diminuição da dimensionalidade do problema sem uma relevante perda de informação.
+
+
+As Figuras \ref{fig:resumo_medias}, \ref{fig:resumo_piores} e \ref{fig:resumo_dps} apresentam um resumo das distribuições das variáveis e suas relações. As variáveis apresentam, de modo geral, valores maiores nos casos de diagnóstico maligno.
 
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE}
@@ -118,16 +132,16 @@ dps <- treino %>%
 
 
 
-```{r cache= TRUE}
+```{r fig.cap="\\label{fig:corr_medias}Correlação entre as variáveis que representam médias", message=FALSE, warning=FALSE, cache=TRUE, paged.print=FALSE}
 
 ggcorr(medias %>% select(-Diagnosis), legend.size = 8) +
-    ggtitle("Correlações", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
+    ggtitle("Correlações entre as médias", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
 
 ```
 
 
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE ,cache= TRUE}
+```{r fig.cap="\\label{fig:resumo_medias}Resumo das distribuições das variáveis que representam médias", message=FALSE, warning=FALSE, paged.print=FALSE ,cache= TRUE}
 
 ggpairs(medias ) +
     theme_grey(base_size = 8) +
@@ -139,16 +153,16 @@ ggpairs(medias ) +
 
 
 
-```{r}
+```{r, fig.cap="\\label{fig:corr_piores}Correlação entre as variáveis que representam as piores medidas.", message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 ggcorr(piores %>% select(-Diagnosis), legend.size = 8) +
-    ggtitle("Correlações", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
+    ggtitle("Correlações entre as piores medidas", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
 
 ```
 
 
 
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache= TRUE}
+```{r fig.cap="\\label{fig:resumo_piores}Resumo das distribuições das variáveis que representam piores medidas", message=FALSE, warning=FALSE, paged.print=FALSE, cache= TRUE}
 ggpairs(piores ) +
     theme_grey(base_size = 8) +
         ggtitle("Resumo das distribuições", subtitle = "É possível observar que o valor da maioria das variáveis se mostra maior para os resultados malignos")
@@ -156,11 +170,11 @@ ggpairs(piores ) +
 ```
 
 
-```{r}
+```{r, fig.cap="\\label{fig:corr_dp}Correlação entre as variáveis que representam os desvios-padrão.", message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 ggcorr(dps %>% select(-Diagnosis), legend.size = 8) +
-    ggtitle("Correlações", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
+    ggtitle("Correlações entre os desvios-padrão", subtitle = "É possível observar que há muitas variáveis bastante \n correlacionadas")
 
 
 ```
@@ -169,7 +183,7 @@ ggcorr(dps %>% select(-Diagnosis), legend.size = 8) +
 
 
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE , cache= TRUE}
+```{r fig.cap="\\label{fig:resumo_dps}Resumo das distribuições das variáveis que representam desvios-padrão das medidas", message=FALSE, warning=FALSE, paged.print=FALSE , cache= TRUE}
 
 ggpairs(dps ) +
     theme_grey(base_size = 8) +
@@ -178,13 +192,21 @@ ggpairs(dps ) +
 
 ```
 
+\newpage
+
 \section{Modelos de classificação}
 
 
+Nesta seção são apresentados os modelos de classificação utilizados e treinados. Também é mostrada a escolha da melhor parametrização de cada modelo.
 
-O modelo é testado em esquema 4-Fold-validation repetido 5 vezes, para melhor avaliação da variância do modelo
+Todos os modelos foram testados em esquema 4-Fold-validation repetido 5 vezes, para melhor avaliação da variância do modelo. Assim, temos no total 20 avaliações de cada parametrização de cada modelo. Cada caso da massa de dados de teste participa de 5 avaliações de cada parametrização.
 
-```{r}
+A métrica escolhida para seleção da melhor parametrização e para a avaliação dos modelos nesta fase de treinamento foi a métrica AUC (area under the curve), que consiste na área sob a curva ROC. A curva ROC é a linha, no eixo cartesiano, que passa pelos pontos $(x_t,y_t)$ onde o valor de $y_t$ é a fração de verdadeiros positivos para um determinado threshold $t$ e o valor de $x_t$ é a fração de valores de falsos positivos para o threshold $t$. Os vários pontos são tomados para diversos valores de $t$. Desde valores de threshold mais altos, que favorecem poucos falsos positivos até valores mais baixos, que favorecem a detecção de todos os casos positivos. Com o valor do AUC é possível, então, avaliar a parametrização que se comporta melhor em todos os pontos deste trade-off.
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 set.seed(13)
 
@@ -212,17 +234,20 @@ controle_cv <- trainControl(
 ```
 
 
-
 \subsection{Regressão logística}
 
 
 
-Em seguida é mostrado o resultado da regressão logística sem o tratamento de redução de dimensionalidade PCA.
+A figura \ref{fig:reg_log} mostra as curvas ROC para a regressão logística simples usando todas as 30 variáveis originais.
+
+As variáveis do conjunto de treinamento foram pré-processadas para que fossem centralizadas em zero e escaladas para o desvio-padrão.
+
+A Tabela \ref{tab_auc_reglog} mostra os resultados para cada fold da regressão logística. A tabela \ref{tab_auc_reglog_grup} mostra os resultados consolidados em média e desvio-padrão. Assim podemos ter a ideia do viés fora da amostra e da variância do modelo. 
+
+\newpage
 
 
-
-
-```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r fig.cap="\\label{fig:reg_log}Representação das curvas ROC de todas as avaliações da regressão logística", message=FALSE, warning=FALSE, paged.print=FALSE}
 
 
 
@@ -255,7 +280,7 @@ ggplot(model_logistic$pred, aes(m = M, d = obs, color = Resample )) +
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 result_model_logistic <-  model_logistic$resample %>% 
@@ -265,7 +290,7 @@ result_model_logistic <-  model_logistic$resample %>%
 
 result_model_logistic %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
+    kable( caption = "\\label{tab_auc_reglog}Métricas para cada Fold da regressão logistica")
 
 
 ```
@@ -273,37 +298,37 @@ result_model_logistic %>%
 Vemos um resultado com  viés e variância ruins
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 result_model_logistic %>%     
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
+    kable(caption = "\\label{tab_auc_reglog_grup}Média e desvio-padrão da Métrica AUC para regressão logistica")
     
 
 
 ```
 
-
-O modelo final mostra que nenhum coeficiente tem significado estatístico. Isso pode ser um efeito colateral de um número muito grande de variáveis explicativas.
-
-
-```{r}
+Na regressão logística podemos enxergar claramente o coeficiente das variáveis explicativas. O modelo final mostrado na Tabela \ref{reg:log} mostra que nenhum coeficiente tem significado estatístico. Isso pode ser um efeito colateral de um número muito grande de variáveis explicativas correlacionadas.
 
 
-summary(model_logistic)
+```{r results='asis', message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
+
+
+texreg(model_logistic$finalModel, custom.model.names = c("Regressão logística simples"), caption = "Coeficientes estimados na regressão logística", label = "reg:log", fontsize = "footnotesize")
 
 
 
 ```
 
-Existem alguns pares de variáveis extremamente correlacionados. A chance de que seja necessário ter as duas variáveis é pequena. 
+\newpage
+
+Existem alguns pares de variáveis extremamente correlacionados, como mostra a Tabela \ref{tab_corr}. A chance de que seja necessário ter as duas variáveis é pequena. 
 
 
-
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 correlacoes <- cor(as.matrix(treino %>% select(-Diagnosis)))
 
 correlacoes_df <- as_tibble(correlacoes) 
@@ -315,15 +340,18 @@ correlacoes_df <- correlacoes_df %>%
     arrange(desc(correlacao)) %>% 
     mutate(coluna1_menor = coluna1 < coluna2) %>% 
     filter(coluna1_menor) %>% 
-    select(-coluna1_menor)
+    select(-coluna1_menor) 
 
-correlacoes_df
+correlacoes_df %>% 
+    rename(var1 = coluna1, var2 = coluna2) %>% 
+    filter(correlacao > 0.9) %>% 
+    kable(digits = 3, caption = "\\label{tab_corr}Correlações entre variáveis: apenas as maiores que 0,9" )
 
 
 ```
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 media_roc_formula <- function(formula, dados)
 {
     
@@ -364,13 +392,22 @@ media_roc_formula <- function(formula, dados)
 
 
 
-Para cada par de variáveis mais correlacionadas $x_i, x_j$ , vamos testar um modelo sem a variável $x_i$ e outro sem a variável $x_j$. A variável que participar do modelo de pior resultado é marcada para exclusão.
+Para criar um modelo com menos variáveis correlacionadas, que tende a possuir menor variância, é necessário retirar algumas delas.
+
+Para cada par de variáveis mais correlacionadas $x_i, x_j$, foi testado um modelo de regressão logística sem a variável $x_i$ e outro sem a variável $x_j$. A variável que participou do modelo de pior resultado foi marcada para exclusão.
+
+
+A Tabela \ref{tab_pares_com_result} mostra o resultado deste processo de exclusão de variáveis para correlações maiores que 0,95. O resultado da média e do desvio-padrão do AUC para este processo de exclusão para mais de 0.95 é mostrado em \ref{tab_95}. A especificação resultante da regressão é mostrada na Tabela \ref{reg:log_95}.
+
+O mesmo processo foi feito para níveis de correlação de 0,90, 0,85, 0,80, 0,75, 0,70 e 0,60. As Tabelas \ref{tab_90}, \ref{tab_85}, \ref{tab_80}, \ref{tab_75}, \ref{tab_70} e \ref{tab_60} mostram os resultados AUC. As tabelas \ref{reg:log_90}, \ref{reg:log_85}, \ref{reg:log_80}, \ref{reg:log_75}, \ref{reg:log_70}, \ref{reg:log_60} mostram as especificações das regressões. É posível ver que as regressões à medida em que o número de variáveis explicativas diminui, mais variáveis estatisticamente significativas vão aparecendo. O melhor resultado em termos de AUC se dá para a retirada de variáveis até 0,7 de correlação.
 
 
 
 
+\newpage
 
-```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE  }
 pares_avaliacao <- correlacoes_df %>% 
     mutate(par = row_number()) %>% 
     gather(variavel, valor,-correlacao, -par  ) %>% 
@@ -398,14 +435,24 @@ pares_avaliacao_com_result <-  pares_avaliacao %>%
     arrange(par, desc(media))
 
 
-kable(pares_avaliacao_com_result)
+
+
     
 ```
 
-Modelo sem as variáveis altamente correlacionadas
+```{r message=FALSE, warning=FALSE, cache=TRUE, paged.print=FALSE}
+
+pares_avaliacao_com_result %>% 
+    mutate(dp = unlist(dp) ) %>% 
+    kable( digits = 3, caption = "\\label{tab_pares_com_result}Resultado da exclusão de variáveis para correlações maiores que 0,95")
 
 
-```{r cache=TRUE}
+```
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 set.seed(13)
 
@@ -432,19 +479,11 @@ model_logistic_sem_correlacionadas <- train(
 
 
 
-ggplot(model_logistic_sem_correlacionadas$pred, aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
-    
-
-
-
 ```
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 result_model_logistic_sem_corr <-  model_logistic_sem_correlacionadas$resample %>% 
@@ -452,40 +491,33 @@ result_model_logistic_sem_corr <-  model_logistic_sem_correlacionadas$resample %
     rename(AUC = ROC) 
 
 
-result_model_logistic_sem_corr %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 
 ```
 
-```{r}
-
-
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 result_model_logistic_sem_corr %>%     
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
+    kable(caption = "\\label{tab_95}Resultados para retirada de variáveis com correlação maior que 0,95")
 
 
 ```
 
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
 
 
 
+```{r message=FALSE, warning=FALSE, cache=TRUE, paged.print=FALSE, results='asis'}
 
-```{r}
 
-
-summary(model_logistic_sem_correlacionadas$finalModel)
+texreg(model_logistic_sem_correlacionadas$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0.95 de correlação", label = "reg:log_95")
 
 ```
 
 
-
+\newpage
 
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
@@ -516,14 +548,11 @@ pares_avaliacao_com_result_90 <-  pares_avaliacao_90 %>%
     arrange(par, desc(media))
 
 
-kable(pares_avaliacao_com_result_90)
-    
+
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
-
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 set.seed(13)
 
@@ -547,11 +576,6 @@ model_logistic_sem_correlacionadas_90 <- train(
 )
 
 
-
-ggplot(model_logistic_sem_correlacionadas_90$pred, aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
     
 
 
@@ -560,21 +584,18 @@ ggplot(model_logistic_sem_correlacionadas_90$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_sem_corr_90 <-  model_logistic_sem_correlacionadas_90$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
-result_model_logistic_sem_corr_90 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 
 
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -582,20 +603,18 @@ result_model_logistic_sem_corr_90 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
+    kable(caption = "\\label{tab_90}Resultados para retirada de variáveis com correlação maior que 0,90")
 
 
 ```
 
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
 
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
 
-```{r}
 
-
-summary(model_logistic_sem_correlacionadas_90$finalModel)
+texreg(model_logistic_sem_correlacionadas_90$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0,90 de correlação", label = "reg:log_90" )
 
 ```
 
@@ -604,10 +623,7 @@ summary(model_logistic_sem_correlacionadas_90$finalModel)
 
 
 
-
-
-
-
+\newpage
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
 pares_avaliacao_85 <- correlacoes_df %>% 
@@ -637,14 +653,11 @@ pares_avaliacao_com_result_85 <-  pares_avaliacao_85 %>%
     arrange(par, desc(media))
 
 
-kable(pares_avaliacao_com_result_85)
-    
+
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
-
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 set.seed(13)
 
@@ -669,11 +682,6 @@ model_logistic_sem_correlacionadas_85 <- train(
 
 
 
-ggplot(model_logistic_sem_correlacionadas_85$pred, aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
-    
 
 
 
@@ -681,20 +689,17 @@ ggplot(model_logistic_sem_correlacionadas_85$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_85 <-  model_logistic_sem_correlacionadas_85$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
 
-result_model_logistic_85 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -704,26 +709,23 @@ result_model_logistic_85 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
+    kable(caption = "\\label{tab_85}Resultados para retirada de variáveis com correlação maior que 0,85")
 
 
 ```
 
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
 
 
-```{r}
-
-
-summary(model_logistic_sem_correlacionadas_85$finalModel)
+texreg(model_logistic_sem_correlacionadas_85$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0,85 de correlação", label = "reg:log_85",)
 
 ```
 
 
 
-
+\newpage
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
 pares_avaliacao_80 <- correlacoes_df %>% 
@@ -753,14 +755,11 @@ pares_avaliacao_com_result_80 <-  pares_avaliacao_80 %>%
     arrange(par, desc(media))
 
 
-kable(pares_avaliacao_com_result_80)
-    
+
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
-
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 set.seed(13)
 
@@ -785,11 +784,6 @@ model_logistic_sem_correlacionadas_80 <- train(
 
 
 
-ggplot(model_logistic_sem_correlacionadas_80$pred, aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
-    
 
 
 
@@ -797,20 +791,17 @@ ggplot(model_logistic_sem_correlacionadas_80$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_80 <-  model_logistic_sem_correlacionadas_80$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
 
-result_model_logistic_80 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -819,27 +810,25 @@ result_model_logistic_80 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
+    kable(caption = "\\label{tab_80}Resultados para retirada de variáveis com correlação maior que 0,80")
 
 
 ```
 
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
 
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
 
-```{r}
 
-
-summary(model_logistic_sem_correlacionadas_80$finalModel)
+texreg(model_logistic_sem_correlacionadas_80$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0,80 de correlação", label = "reg:log_80",)
 
 ```
 
 
 
 
-
+\newpage
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
 pares_avaliacao_75 <- correlacoes_df %>% 
@@ -868,15 +857,11 @@ pares_avaliacao_com_result_75 <-  pares_avaliacao_75 %>%
     ungroup() %>% 
     arrange(par, desc(media))
 
-
-kable(pares_avaliacao_com_result_75)
-    
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
 
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 formula_sem_variaveis_75 <- pares_avaliacao_com_result_75 %>%
     filter(exclui) %>% 
@@ -898,11 +883,6 @@ model_logistic_sem_correlacionadas_75 <- train(
 )
 
 
-
-ggplot(model_logistic_sem_correlacionadas_75$pred, aes(m = M, d = obs, color = Resample )) +
-    geom_roc( labels = FALSE  ) +
-    coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-
     
 
 
@@ -911,19 +891,16 @@ ggplot(model_logistic_sem_correlacionadas_75$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_75 <-  model_logistic_sem_correlacionadas_75$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
 
-result_model_logistic_75 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -931,19 +908,7 @@ result_model_logistic_75 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
-
-```
-
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
-
-
-
-
-```{r}
-
-
-summary(model_logistic_sem_correlacionadas_75$finalModel)
+    kable(caption = "\\label{tab_75}Resultados para retirada de variáveis com correlação maior que 0,75")
 
 ```
 
@@ -951,6 +916,12 @@ summary(model_logistic_sem_correlacionadas_75$finalModel)
 
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
+
+
+texreg(model_logistic_sem_correlacionadas_75$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0,75 de correlação", label = "reg:log_75",)
+
+```
 
 
 
@@ -958,6 +929,11 @@ summary(model_logistic_sem_correlacionadas_75$finalModel)
 
 
 
+
+
+
+
+\newpage
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
 pares_avaliacao_70 <- correlacoes_df %>% 
@@ -987,14 +963,10 @@ pares_avaliacao_com_result_70 <-  pares_avaliacao_70 %>%
     arrange(par, desc(media))
 
 
-kable(pares_avaliacao_com_result_70)
-    
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
-
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:reg_log}Representação das curvas ROC de todas as avaliações da regressão logística com variáveis correlacionadas a partir de 0,7 retiradas"}
 
 formula_sem_variaveis_70 <- pares_avaliacao_com_result_70 %>%
     filter(exclui) %>% 
@@ -1029,19 +1001,16 @@ ggplot(model_logistic_sem_correlacionadas_70$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_70 <-  model_logistic_sem_correlacionadas_70$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
 
-result_model_logistic_70 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -1049,19 +1018,7 @@ result_model_logistic_70 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
-
-```
-
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
-
-
-
-
-```{r}
-
-
-summary(model_logistic_sem_correlacionadas_70$finalModel)
+    kable(caption = "\\label{tab_70}Resultados para retirada de variáveis com correlação maior que 0,70")
 
 ```
 
@@ -1069,13 +1026,24 @@ summary(model_logistic_sem_correlacionadas_70$finalModel)
 
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
+
+
+texreg(model_logistic_sem_correlacionadas_70$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0.70 de correlação", label = "reg:log_70",)
+
+```
+
+
+
+
+\newpage
 
 ```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
 pares_avaliacao_60 <- correlacoes_df %>% 
     mutate(par = row_number()) %>% 
     gather(variavel, valor,-correlacao, -par  ) %>% 
     mutate(formula =paste0("Diagnosis ~ . -", valor)) %>% 
-    filter(correlacao > 0.50 ) 
+    filter(correlacao > 0.60 ) 
 
 
 
@@ -1097,15 +1065,11 @@ pares_avaliacao_com_result_60 <-  pares_avaliacao_60 %>%
     ungroup() %>% 
     arrange(par, desc(media))
 
-
-kable(pares_avaliacao_com_result_60)
-    
 ```
 
-Modelo sem as variáveis altamente correlacionadas
 
 
-```{r cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:reg_log}Representação das curvas ROC de todas as avaliações da regressão logística com variáveis correlacionadas a partir de 0,6 retiradas"}
 
 formula_sem_variaveis_60 <- pares_avaliacao_com_result_60 %>%
     filter(exclui) %>% 
@@ -1140,19 +1104,16 @@ ggplot(model_logistic_sem_correlacionadas_60$pred, aes(m = M, d = obs, color = R
 
 
 
-```{r,cache=TRUE}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 result_model_logistic_60 <-  model_logistic_sem_correlacionadas_60$resample %>% 
     select(Resample, ROC) %>%
     rename(AUC = ROC) 
 
 
-result_model_logistic_60 %>% 
-    mutate_if(is.numeric, percent) %>% 
-    kable( caption = "Métricas para cada Fold")
 ```
 
-```{r, cache=TRUE   }
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -1160,29 +1121,37 @@ result_model_logistic_60 %>%
     summarise(media = mean(AUC), sd = sd(AUC)) %>% 
     rename("Média AUC" = media, "Desvio-padrão AUC" = sd) %>% 
     mutate_if(is.numeric, percent) %>% 
-    kable()
-
-```
-
-Além de melhorar a performance (viés) do do modelo, a especificação sem as variáveis altamente correlacionadas mostra coeficientes estatisticamente significativos.
-
-
-
-
-```{r,cache=TRUE}
-
-
-summary(model_logistic_sem_correlacionadas_60$finalModel)
+    kable(caption = "\\label{tab_60}Resultados para retirada de variáveis com correlação maior que 0,60")
 
 ```
 
 
 
-Agora lasso
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, results='asis'}
 
-```{r, cache = TRUE}
+
+texreg(model_logistic_sem_correlacionadas_60$finalModel, fontsize = "footnotesize", custom.model.names = c("Regressão logística"), caption = "Coeficientes estimados na regressão logística com exclusão de uma variável em pares com mais de 0,60 de correlação", label = "reg:log_60",)
+
+```
+
+\newpage
+
+\subsection{Regressão logística lasso-ridge}
+
+Uma outra forma de retirar variáveis do modelo de forma natural é aplicar uma penalidade para um cada número grande de variáveis. É isso que as regressões do tipo Ridge e Lasso fazem. 
+
+O modelo mostrado nessa seção é rodado com várias parametrizações. Este modelo conjuga a penalização do tipo ridge com a penalização do tipo lasso.
+
+Cada parametrização do modelo rodado nesta seção possui dois valores. Um dos valores define que peso deve ser dado a cada tipo de penalização ridge ou lasso. O outro parâmetro regula a intensidade da penalização.
+
+Os resultados para várias parametrizações é mostrado pela Figura \ref{fig:roc_net}. Os resultados de cada parametrização são mostrados na Tabela \ref{tab_lasso-ridge} em ordem decrescente de AUC.
+
+
+\newpage
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_net}Média do AUC das parametrizações da regressão logística do tipo lasso-ridge"}
 
 
 set.seed(13)
@@ -1207,25 +1176,34 @@ model_net <- train(
 plot(model_net)
 
 
-resultados_net <- model_net$resample %>% 
-    group_by(alpha, lambda) %>% 
-    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
-    arrange(desc(media)) %>% 
-    rename("Média AUC" = media)
 
 
-
-resultados_net
 
 
 
 ```
 
+```{r, cache=TRUE}
+
+
+resultados_net <- model_net$resample %>% 
+    group_by(alpha, lambda) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media) 
+
+
+kable(resultados_net, digits = 7, caption = "\\label{tab_lasso-ridge}Resultados da regressão lasso-ridge")
 
 
 
 
-```{r, cache = TRUE}
+```
+
+A regressão também foi rodada usando a mesma seleção de variáveis da regressão logística simples anterio: sem um das variáveis de cada par com correlação maior que 0,7. O resultado foi pior do que o da regressão com todas as variáveis, conform podemos ver na Figura \ref{fig:roc_net_sem} e na Tabela \ref{tab_lasso-ridge_sem}.
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_net_sem}Média do AUC das parametrizações da regressão logística do tipo lasso-ridge sem variáveis altamente correlacionadas"}
 
 
 
@@ -1261,97 +1239,15 @@ resultados_net_sem <- model_net$resample %>%
 
 
 
-resultados_net_sem
 
 
 
 ```
-
-
-
-
 
 ```{r, cache=TRUE}
 
 
-
-model_ranger <- train(
-    
-    Diagnosis  ~ .,
-    treino,
-    metric = "ROC",
-    method = "ranger",
-    trControl = controle_cv,
-    preProcess = c( "center", "scale"),
-    verbose = TRUE
-
-
-)
-
-
-
-
-resultados_ranger <- model_ranger$resample %>% 
-    group_by(mtry, splitrule) %>% 
-    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
-    arrange(desc(media)) %>% 
-    rename("Média AUC" = media)
-
-
-resultados_ranger
-
-
-
-
-```
-
-```{r}
-
-
-
-
-
-model_tree <- train(
-    
-    Diagnosis  ~ .,
-    treino,
-    metric = "ROC",
-    method = "rpart",
-    trControl = controle_cv,
-    preProcess = c( "center", "scale")
-
-
-)
-
-plot(model_tree$finalModel)
-
-
-
-resultados_tree <- model_tree$resample %>% 
-    group_by(cp) %>% 
-    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
-    arrange(desc(media)) %>% 
-    rename("Média AUC" = media)
-
-
-
-resultados_modelo <- function(modelo)
-{
-    res <- modelo$resample %>% 
-        select(-Sens, -Spec) %>% 
-        group_by_at(vars(-ROC, -Resample)) %>% 
-        summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
-        arrange(desc(media)) %>% 
-        rename("Média AUC" = media)
-    
-    res
-    
-}
-
-
-
-
-
+kable(resultados_net_sem, digits = 7, caption = "\\label{tab_lasso-ridge_sem}Resultados da regressão lasso-ridge sem variáveis altamente correlacionadas")
 
 
 
@@ -1359,7 +1255,11 @@ resultados_modelo <- function(modelo)
 
 
 
-```{r}
+Uma outra forma de reduzir a dimensionalidade do probelam é usar o método PCA para transformar as variáveis em componentes principais em menor número mas com boa parte da informação original. O resultado foi pior do que o da regressão com todas as variáveis, conform podemos ver na Figura \ref{fig:roc_net_pca} e na Tabela \ref{tab_lasso-ridge_pca}.
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_net_pca}Média do AUC das parametrizações da regressão logística do tipo lasso-ridge com pré-processamento por PCA"}
 
 
 
@@ -1393,8 +1293,110 @@ resultados_net_pca <- model_net$resample %>%
 
 
 
-resultados_net_pca
 
+
+```
+
+
+```{r}
+
+
+
+kable(resultados_net_pca, digits = 7, caption = "\\label{tab_lasso-ridge_pca}Resultados da regressão lasso-ridge com pré-processamento PCA")
+
+
+
+
+
+
+
+```
+
+\newpage
+
+\subsection{Árvore de decisão e Floresta Aleatória}
+
+
+Os resultados da aplicação de árvore de decisão são mostrados na Figura \ref{fig:roc_rpart} e na Tabela \ref{tab_rpart}.
+
+Já os resultados da aplicação de Floresta Aleatória, bem melhores, são mostrados na Figura \ref{fig:roc_ranger} e na Tabela \ref{tab_ranger}. 
+
+
+
+
+```{r, fig.cap="\\label{fig:roc_rpart}Média do AUC das parametrizações do método de Árvore de decisão", cache= TRUE }
+
+
+
+
+model_tree <- train(
+    
+    Diagnosis  ~ .,
+    treino,
+    metric = "ROC",
+    method = "rpart",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale")
+
+
+)
+
+plot(model_tree$finalModel)
+
+
+
+resultados_tree <- model_tree$resample %>% 
+    group_by(cp) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+```
+
+
+```{r, cache = TRUE}
+
+
+kable(resultados_tree, digits = 7, caption = "\\label{tab_rpart}Resultados do método de Árvore de Decisão")
+
+
+```
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_ranger}Média do AUC das parametrizações do método de Floresta Aleatória", cache= TRUE}
+
+
+
+model_ranger <- train(
+    
+    Diagnosis  ~ .,
+    treino,
+    metric = "ROC",
+    method = "ranger",
+    trControl = controle_cv,
+    preProcess = c( "center", "scale"),
+    verbose = TRUE
+
+
+)
+
+
+
+
+resultados_ranger <- model_ranger$resample %>% 
+    group_by(mtry, splitrule) %>% 
+    summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+    arrange(desc(media)) %>% 
+    rename("Média AUC" = media)
+
+
+
+plot(model_ranger)
 
 
 
@@ -1405,8 +1407,55 @@ resultados_net_pca
 
 
 
-
 ```{r}
+
+
+
+kable(resultados_ranger, digits = 7, caption = "\\label{tab_ranger}Resultados do método de Floresta Aleatória")
+
+
+```
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE }
+
+
+
+resultados_modelo <- function(modelo)
+{
+    res <- modelo$resample %>% 
+        select(-Sens, -Spec) %>% 
+        group_by_at(vars(-ROC, -Resample)) %>% 
+        summarise(media = mean(ROC), "Desvio-padrão AUC" = sd(ROC)) %>% 
+        arrange(desc(media)) %>% 
+        rename("Média AUC" = media)
+    
+    res
+    
+}
+
+
+
+
+
+
+
+
+```
+
+\newpage
+
+\subsection{Modelo Aditivo Generalizado} 
+
+
+O Modelo Aditivo Generalizado (GAM) estende a regressão logística simples aplicando funções não lineares às variáveis. Os resultados são mostrados na Figura \ref{fig:roc_gam} e na Tabela \ref{tab_gam}.
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_gam}Média do AUC das parametrizações do método aditivo generalizado (GAM)"}
 
 
 
@@ -1443,8 +1492,6 @@ resultados_gamboost <- model_gamboost$resample %>%
 
 
 
-resultados_gamboost
-
 
 
 
@@ -1457,10 +1504,24 @@ resultados_gamboost
 
 
 
+```{r}
+
+kable(resultados_gamboost, digits = 7, caption = "\\label{tab_gam}Resultados do método aditivo generalizado (GAM)")
+
+```
 
 
 
-```{r, cache= TRUE}
+
+\subsection{Support Vector Machine} 
+
+
+O modelo Support Vector Machine tenta separar os pontos da melhor forma possível usando hiperplanos no espaço. Os resultados são mostrados na Figura \ref{fig:roc_svm} e na Tabela \ref{tab_svm}.
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:roc_svm}Média do AUC das parametrizações do método Support Vector Machine"}
 
 
 
@@ -1494,7 +1555,6 @@ resultados_svm <- model_svm$resample %>%
 
 
 
-resultados_svm
 
 
 
@@ -1504,26 +1564,9 @@ resultados_svm
 
 
 
-
-
-
-
-
-
-
-
 ```{r}
 
-
-resultados_modelo(model_logistic_sem_correlacionadas_70) 
-
-resultados_modelo(model_net) 
-
-resultados_modelo(model_ranger) 
-
-resultados_modelo(model_gamboost)
-
-resultados_modelo(model_svm)
+kable(resultados_svm, digits = 7, caption = "\\label{tab_svm}Resultados do método Support Vector Machine")
 
 
 
@@ -1531,29 +1574,57 @@ resultados_modelo(model_svm)
 
 
 
-```{r}
+\subsection{Modelo Ensemble} 
+
+
+Foi criado um modelo Ensemble com 5 modelos escolhidos nas seções anteriores. Este modelo decide a classificação da variável de resposta levando em conta  maioria dos votos dos 5 modelos, de acordo com o threshold escolhido. Por exemplo se o threshold é 0,4, o caso é considerado maligno se 3 ou mais modelos apontarem que a probabilidade de malignidade é maior que 0,4.
+
+O resultado deste modelo é apontado na tabela \ref{tab_ens}.
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
+
+# 
+# resultados_modelo(model_logistic_sem_correlacionadas_70) 
+# 
+# resultados_modelo(model_net) 
+# 
+# resultados_modelo(model_ranger) 
+# 
+# resultados_modelo(model_gamboost)
+# 
+# resultados_modelo(model_svm)
+# 
+
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
 pred_logistic <- model_logistic_sem_correlacionadas_70$pred %>% 
     semi_join(model_logistic_sem_correlacionadas_70$bestTune) %>% 
-    mutate(modelo = "logist sem")
+    mutate(modelo = "Logística sem coorrel")
 
 pred_net <- model_net$pred %>% 
     semi_join(model_net$bestTune) %>% 
-    mutate(modelo = "logist net")
+    mutate(modelo = "Logística lasso-ridge")
     
 pred_svm <- model_svm$pred %>% 
     semi_join(model_svm$bestTune) %>% 
-    mutate(modelo = "svm")
+    mutate(modelo = "SVM")
 
 pred_boost <- model_gamboost$pred %>% 
     semi_join(model_gamboost$bestTune) %>% 
-    mutate(modelo = "boost") 
+    mutate(modelo = "Gam") 
 
 pred_ranger <- model_ranger$pred %>% 
     semi_join(model_ranger$bestTune) %>% 
-    mutate(modelo = "ranger")
+    mutate(modelo = "Floresta")
 
 
 pred_ensemble_todos <- bind_rows(pred_logistic, pred_net, pred_boost, pred_ranger, pred_svm )
@@ -1588,16 +1659,33 @@ pred_ensemble_mediana_foldado <- model_ranger$pred %>%
     nest() %>% 
     mutate( roc = map(data, ret_roc), auc = unlist(map(data, ret_roc_auc))  )
 
-mean(pred_ensemble_mediana_foldado$auc)
 
-sd(pred_ensemble_mediana_foldado$auc)
+
+
+resultado_ensemble_pra_mostrar <- tibble( "Média AUC" = mean(pred_ensemble_mediana_foldado$auc), "Desvio-padrão AUC" = sd(pred_ensemble_mediana_foldado$auc) )
+
+
+kable(resultado_ensemble_pra_mostrar, digits = 7, caption = "\\label{tab_ens}Resultados do método Ensenble, juntando os 5 modelos escolhidos")
+
+
 
 ```
 
 
+\newpage
+
+\subsection{Avaliação do impacto das variáveis}
 
 
-```{r}
+Para avaliar o impacto de cada variável nos resultados de cada um dos 5 modelos, geramos casos sintéticos e avaliamos a probabilidade de esses casos serem malignos segundo cada modelo.
+
+Dois grupos de casos sintéticos foram gerados. No primeiro grupo, mostrado na Figura \ref{fig:varia_0.5}, para cada variável explicativa, foram criados casos onde o valor das outras variávei. No segundo grupo, mostrado na Figura \ref{fig:varia_0.65} para avaliar uma região onde os casos têm mais chance de ser malignos, as variáveis que não estão variando são mantidas no quantil 0.65.
+
+É possível verificar que algumas variáveis parecem não afetar a chance do caso ser maligno, como o desvio-padrão da dimensão fractal. Outras aumentam bastante o risco quando em valores mais altos segundo alguns modelos, como a pior medida de área na regressão logística simples. Outras, por outro lado, parecem ser consideradas por vários modelos, como a medida de pior concavidade de pontos. Algumas medidas parecem ter efeitos não lineares ou mesmo contrários à intuição (pelo menos a intuição leiga), principalmente na região onde todas as outras variáveis estão fixas no quantil 0.65.
+
+\newpage
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:varia_0.5}Casos sintéticos e suas probabilidades de serem malignas. Em cada gráfico, uma variável varia pelos quantis e as outras são mantidas na mediana dos valores"}
 
 
 medias_treino <- treino %>% 
@@ -1643,23 +1731,122 @@ casos <- variaveis %>%
     spread(fixa, valor)
     
 prev_boost <- predict(model_gamboost, casos, type = "prob") %>% 
-    mutate(modelo = "boost") %>% 
+    mutate(modelo = "GAM") %>% 
     bind_cols(casos)
 
 prev_svm <- predict(model_svm, casos, type = "prob") %>% 
-    mutate(modelo = "svm") %>% 
+    mutate(modelo = "SVM") %>% 
     bind_cols(casos)
 
 prev_ranger <- predict(model_ranger, casos, type = "prob") %>% 
-    mutate(modelo = "ranger") %>% 
+    mutate(modelo = "Floresta") %>% 
     bind_cols(casos)
 
 prev_log_sem <- predict(model_logistic_sem_correlacionadas_70, casos, type = "prob") %>% 
-    mutate(modelo = "logist sem") %>% 
+    mutate(modelo = "Logística sem correl") %>% 
     bind_cols(casos)
 
 prev_log_net <- predict(model_net, casos, type = "prob") %>% 
-    mutate(modelo = "logist net") %>% 
+    mutate(modelo = "Logística lasso-ridge") %>% 
+    bind_cols(casos)
+
+
+
+prev <- 
+    bind_rows(prev_svm, prev_boost, prev_ranger, prev_log_sem, prev_log_net)
+
+
+
+prev %>% 
+    ggplot() +
+    geom_line( aes(x = q, y = M, color = modelo) ) +
+    facet_wrap( ~variavel) +
+    theme_minimal() +
+    theme(
+        aspect.ratio = .4,
+        strip.text = element_text(size = 5),
+        strip.background.y = element_rect(size = c(0.1,0.1)),
+        strip.switch.pad.grid = unit(.01,"cm"),
+        strip.switch.pad.wrap = unit(.01,"cm"),
+        axis.text =  element_text(size = 4) 
+        
+        )
+    
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:varia_0.65}Casos sintéticos e suas probabilidades de serem malignas. Em cada gráfico, uma variável varia pelos quantis e as outras são mantidas no quantil 0.65 dos valores"}
+
+
+medias_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(mean) %>% 
+    gather(variavel, media) 
+
+dps_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(sd) %>% 
+    gather(variavel, dp) 
+
+mediana_treino <- treino %>% 
+    select(-Diagnosis) %>% 
+    summarise_all(median) %>% 
+    gather(variavel, mediana) 
+
+
+variaveis <- medias_treino %>% 
+    select(variavel)
+
+caso_media <- medias_treino %>% 
+    spread(variavel, media)
+
+
+quantis <- treino %>% 
+    select(-Diagnosis) %>% 
+    gather(variavel, valor) %>% 
+    crossing( tibble( q = seq(0,1, 0.05))   ) %>% 
+    group_by(variavel,q ) %>% 
+    summarise( valor = quantile(valor, mean(q))) 
+    
+
+casos <- variaveis %>% 
+    crossing(variaveis) %>% 
+    rename(fixa = variavel1) %>% 
+    crossing(tibble( q = seq(0,1, 0.05)) ) %>% 
+    arrange(q, variavel, fixa) %>% 
+    mutate(caso = (row_number()-1) %/% nrow(variaveis) + 1) %>% 
+    mutate(q_cada_variavel = if_else(variavel == fixa, q, 0.65 )) %>% 
+    inner_join(quantis, by=c("q_cada_variavel" = "q", "fixa" = "variavel") ) %>%
+    select(-q_cada_variavel) %>% 
+    spread(fixa, valor)
+    
+prev_boost <- predict(model_gamboost, casos, type = "prob") %>% 
+    mutate(modelo = "GAM") %>% 
+    bind_cols(casos)
+
+prev_svm <- predict(model_svm, casos, type = "prob") %>% 
+    mutate(modelo = "SVM") %>% 
+    bind_cols(casos)
+
+prev_ranger <- predict(model_ranger, casos, type = "prob") %>% 
+    mutate(modelo = "Floresta") %>% 
+    bind_cols(casos)
+
+prev_log_sem <- predict(model_logistic_sem_correlacionadas_70, casos, type = "prob") %>% 
+    mutate(modelo = "Logística sem correl") %>% 
+    bind_cols(casos)
+
+prev_log_net <- predict(model_net, casos, type = "prob") %>% 
+    mutate(modelo = "Logística lasso-ridge") %>% 
     bind_cols(casos)
 
 
@@ -1671,15 +1858,15 @@ prev <-
 prev %>% 
     ggplot() +
     geom_line( aes(x = q, y = M, color = modelo) ) +
-    facet_wrap( ~variavel, ncol = 3) +
+    facet_wrap( ~variavel ) +
     theme_minimal() +
     theme(
         aspect.ratio = .4,
-        strip.text = element_text(size = 6),
+        strip.text = element_text(size = 5),
         strip.background.y = element_rect(size = c(0.1,0.1)),
         strip.switch.pad.grid = unit(.01,"cm"),
         strip.switch.pad.wrap = unit(.01,"cm"),
-        axis.text =  element_text(size = 6) 
+        axis.text =  element_text(size = 4) 
         )
     
 
@@ -1687,11 +1874,17 @@ prev %>%
 ```
 
 
+\newpage
 
 
-```{r}
 
-    
+
+
+
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 modelo <- model_gamboost
 
 roc_best_modelo <- function(modelo)
@@ -1773,21 +1966,44 @@ plota_roc_ensemble <-  function(modelo, prob, nome)
         coord_equal() + style_roc() + ggtitle(paste0("ROC - ", nome), subtitle = paste0("Corte na probabilidade ", prob )) + style_roc()
     
 }
+```
+
+
+\subsection{Modelos escolhidos e seus thresholds}
+
+
+Foram escolhidas 5 parametrizações de 5 tipos de modelos para avaliação com os dados de teste, separados antes do início da análise. Para cad um destes modelos, foi escolhido um threshold de forma a minimizar o risco de se perder um caso maligno, mas evitando um número muito grande de falsos positivos. Esta escolha foi feita visualmente com a análise da curva ROC. As Figuras \ref{thre_gam}, \ref{thre_log}, \ref{thre_lassoridge}, \ref{thre_svm}, \ref{thre_ranger}, \ref{thre_ens},  
 
 
 
 
-plota_roc_modelo(model_gamboost, 0.25, "Gam Boost")
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_gam}Escolha do threshold modelo GAM"}
+plota_roc_modelo(model_gamboost, 0.25, "Gam")
+```
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_log}Escolha do threshold modelo de regressão logística"}
 plota_roc_modelo(model_logistic_sem_correlacionadas_70, 0.1, "Logistica sem correlacionados")
+```
 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_log_lassoridge}Escolha do threshold modelo de regressão logística lasso-ridge"}
 plota_roc_modelo(model_net, 0.35, "Logistica lasso-ridge")
+```
 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_svm}Escolha do threshold modelo SVM"}
 plota_roc_modelo(model_svm, 0.2, "SVM")
+```
 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_ranger}Escolha do threshold modelo Floresta Aleatória"}
 plota_roc_modelo(model_ranger, 0.35, "Random forest")
+```
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE, fig.cap="\\label{fig:thre_ens}Escolha do threshold modelo Ensemble"}
 plota_roc_ensemble()
 
 # roc_svm
@@ -1806,10 +2022,18 @@ plota_roc_ensemble()
 ```
 
 
+\newpage
 
 
+\section{Avaliação dos resultados} \label{aval}
 
-```{r}
+
+A seguir são mostrados os resultados da aplicação dos modelos escolhidos nos dados de teste.
+
+
+Resultados do modelo Support Vector Machine:
+
+```{r message=FALSE, warning=FALSE, cache=TRUE, paged.print=FALSE}
 
 
 confusao_teste <- function(modelo, threshold)
@@ -1826,6 +2050,25 @@ confusao_teste <- function(modelo, threshold)
 }
 
 
+gera_dados_confusao_teste <- function(modelo, threshold)
+{
+
+    prev_teste_svm <- predict(modelo, teste, type = "prob") 
+    
+    
+    pred_teste_svm <- prev_teste_svm %>% 
+        mutate(pred = as.factor( if_else(M > threshold, "M", "B"))) %>% 
+        select(pred)
+    
+    #tibble(data = pred_teste_svm$pred, reference =  teste$Diagnosis, positive = "M")
+    
+    bind_cols(pred_teste_svm, teste) 
+    
+}
+
+
+
+
 confusao_svm <- confusao_teste(model_svm, 0.2)
 confusao_svm
 
@@ -1833,7 +2076,11 @@ confusao_svm
 
 ```
 
-```{r}
+Resultados do modelo Generalized Additive Model (GAM):
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 confusao_boost <- confusao_teste(model_gamboost, 0.25)
@@ -1842,7 +2089,12 @@ confusao_boost
 
 ```
 
-```{r}
+
+Resultados do modelo Regressão Logística Simples sem variáveis altamente correlacionadas:
+
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 confusao_log <- confusao_teste(model_logistic_sem_correlacionadas_70, 0.1)
@@ -1852,8 +2104,11 @@ confusao_log
 
 ```
 
+Resultados do modelo Regressão Logística Lasso-Ridge:
 
-```{r}
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 confusao_net <- confusao_teste(model_net, 0.35)
 confusao_net
@@ -1863,9 +2118,10 @@ confusao_net
 
 ```
 
+Resultados do modelo Floresta Aleatória:
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 
 
@@ -1876,8 +2132,9 @@ confusao_ranger
 
 ```
 
+Resultados do modelo Ensemble:
 
-```{r}
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, cache=TRUE}
 
 pred_test_1 <- predict(model_logistic_sem_correlacionadas_70, teste, type = "prob") %>% 
     mutate(row = row_number())  
@@ -1899,6 +2156,11 @@ pred_teste_ensemble <- bind_rows(pred_test_1, pred_test_2, pred_test_3, pred_tes
     summarise (M = median(M)) %>% 
     mutate(pred = as.factor( if_else(M > 0.3, "M", "B"))) 
 
+
+
+
+
+
 confusao_ensemble <- confusionMatrix(data = pred_teste_ensemble$pred, reference =  teste$Diagnosis, positive = "M")
     
 confusao_ensemble        
@@ -1913,13 +2175,84 @@ confusao_ensemble
 
 
 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
 
 
-```{r}
+dados_confusao_teste1 <- gera_dados_confusao_teste(model_svm, 0.2) %>% 
+    mutate(modelo = "svm", linha = row_number())
+
+dados_confusao_teste2 <- gera_dados_confusao_teste(model_gamboost, 0.25) %>% 
+    mutate(modelo = "gam", linha = row_number())
+
+dados_confusao_teste3 <- gera_dados_confusao_teste(model_ranger , 0.35) %>% 
+    mutate(modelo = "ranger", linha = row_number())
+
+dados_confusao_teste4 <- gera_dados_confusao_teste(model_logistic_sem_correlacionadas_70, 0.1) %>% 
+    mutate(modelo = "log", linha = row_number())
+
+dados_confusao_teste5 <- gera_dados_confusao_teste(model_net, 0.35) %>% 
+    mutate(modelo = "lassoridge", linha = row_number())
 
 
-teste
+dados_confusao_teste_todos <- bind_rows(
+    
+    dados_confusao_teste1,
+    dados_confusao_teste2,
+    dados_confusao_teste3,
+    dados_confusao_teste4,
+    dados_confusao_teste5
+    
+)
 
+pred_errados_teste <- dados_confusao_teste_todos %>% 
+    filter(pred != Diagnosis) %>% 
+    group_by(linha, pred, Diagnosis) %>% 
+    summarise(n= n())
+
+```
+
+Alguns casos foram diagnosticados de forma errada por todos os modelos. Chama a atenção o caso de número 50 da base de testes, que tinha o diagnóstico real maligno mas foi diagnosticado como benigno por todos os modelos, apesar de todo o viés imposto para que este tipo de erro não acontecesse. Trata-se de um possível ruído na base.
+
+
+A Figura \ref{fig:zonas_erro} mostra a posição dos casos na base de teste em relação a cada atributo. os pontos pretos se tratam de asos diagnosticados corretamente. Os pontos azuis são falsos positivos. A cada modelo que erra, um ponto aparece. os pontos vermelhos são os falsos negativos.
+
+```{r fig.cap="\\label{fig:zonas_erro}Casos na base de testes. Os pontos pretos indicam diagnósticos corretos, os pontos azuis indicam falsos positivos, os vermelhor, falsos negativos"}
+
+
+dados_confusao_teste_todos_tidy <- dados_confusao_teste_todos %>% 
+    gather(atributo, valor, - pred,-Diagnosis, - modelo, - linha) %>% 
+    select(-linha)
+
+dados_confusao_teste_todos_certos <- 
+    dados_confusao_teste_todos_tidy %>% 
+    filter(pred == Diagnosis)
+
+dados_confusao_teste_todos_falso_positivo <- 
+    dados_confusao_teste_todos_tidy %>% 
+    filter(pred == "M" & Diagnosis == "B")
+
+dados_confusao_teste_todos_falso_negativo <- 
+    dados_confusao_teste_todos_tidy %>% 
+    filter(pred == "B" & Diagnosis == "M")
+
+
+ggplot() +
+    geom_jitter(data = dados_confusao_teste_todos_certos, aes(x = valor, y = 0), alpha = 0.05, size = 0.5) +
+    geom_jitter(data = dados_confusao_teste_todos_falso_positivo, aes(x = valor, y = 0), alpha = 0.5, color = "blue", size = 0.5) +
+    geom_jitter(data = dados_confusao_teste_todos_falso_negativo , aes(x = valor, y = 0), alpha = 0.5, color = "red", size = 0.5) +
+    facet_wrap(~atributo, scales = "free") +
+    theme_minimal() +
+    theme(
+        aspect.ratio = .4,
+        strip.text = element_text(size = 5),
+        strip.background.y = element_rect(size = c(0.1,0.1)),
+        strip.switch.pad.grid = unit(.01,"cm"),
+        strip.switch.pad.wrap = unit(.01,"cm"),
+        axis.text =  element_text(size = 4) ,
+        axis.text.y = element_blank()
+        
+        )
+    
 
 
 ```
@@ -1927,417 +2260,22 @@ teste
 
 
 
+\section {Conclusões}
 
-```{r}
 
-# 
-# sensibilidades <- tibble(sensibilidade = c(0.3))
-# 
-# 
-# metricas <- model_logistic_sem_correlacionadas_80$pred %>% 
-#     crossing(sensibilidades) %>%
-#     mutate(pred_sens = if_else(M >= sensibilidade, "M", "B" )) %>% 
-#     group_by(sensibilidade, Resample) %>% 
-#     summarise(  TP = sum(obs == "M" & pred == "M"), 
-#                 P = sum(obs == "M")  ,
-#                 TN = sum(obs == "B" & pred == "B"),
-#                 N = sum(obs == "B")
-#                 
-#                 ) %>% 
-#     mutate(Sens= TP/P) %>% 
-#     View()
-#     
-# #     
-# # model_logistic_sem_correlacionadas_80$resample %>% 
-# #     select(-parameter) %>%
-# #     mutate_if(is.numeric, percent) %>% 
-# #     kable( caption = "Métricas para cada Fold")
-#     
-# ggplot(model_logistic_sem_correlacionadas_80$pred %>% filter(Resample == "Fold1.Rep1"), aes(m = M, d = obs, color = Resample )) +
-#     geom_roc( labels = TRUE, cutoffs.at = c(0.5, 0.4, 0.3)  ) +
-#     coord_equal() + style_roc() + ggtitle("ROC", subtitle = "Métricas para diversos thresholds" )
-# 
-#     
- fold <- model_logistic$pred %>% filter(Resample == "Fold1.Rep01")
- 
- teste <- roc(fold$obs, fold$M)
- 
-# summary(teste)
-# 
-# 
-# 
-# teste$sensitivities
-# 
-# teste$thresholds
-# 
-# teste$specificities
-# 
-# teste$auc
-# 
-# model_logistic_sem_correlacionadas_80$resample %>% filter(Resample == "Fold1.Rep1")
+Os modelos que têm maior acurária nos dados de teste foram o de Floresta Aleatória e Generalized Additive Model com aproximadamente 95%.
 
-```
+os modelos que apresentaram menor variância usando como referência o desvio-padrão do AUC da parametrização de melhor média de AUC para as 40 execuções do 4-fold cross validation repetido 5 vezes nos dados de treinamento foi o modeo Support Vector Machine com 0,00235.
 
+Quatro modelos erraram apenas um dos casos graves do caso de teste, atingindo a sensibilidade de aproximadamente 98%. O único modelo que errou dois casos foi o de Floresta Aleatória.
 
-<!-- \section{Algoritmo Gale-Shapley} -->
+As regiões de cada atributo com casos mais dificeis de classificar podem ser vistas na Figura \ref{fig:zonas_erro}. Um exemplo de zona com uma densidade alta de falsos positivos e uma densidade relativamente baixa de diagnósticos corretos são os casos com textura média levemente alta.
 
+Um dos caso de teste se mostrou com falso negativo para todos os modelos, o que é um indicativo forte de que é um ruído, dado a alta sensibilidade dos modelos e o fato de serem baseados em métodos diferentes.
 
-<!-- O algoritmo implementado foi baseado no livro-texto da matéria [@tardos2006algorithm]. Basicamente o algoritmo segue os seguintes passos, usando um vocabulário de casamentos entre heterossexuais: -->
+Os atributos mais decisivos para classificação podem ser vistos nas figuras \ref{fig:varia_0.5} e \ref{fig:varia_0.65}. A pior medida de concavidade de pontos é um exemplo de atributo em que um caso com alto valor ati8va uma probabilidade alta de cvaso maligno em muitos os modelos.
 
-<!-- - Enquanto há um homem solteiro $h$ -->
-<!--     - $h$ propõe à próxima mulher de sua preferência à qual ainda não propôs, $m$ -->
-<!--     - Se $m$ está solteira -->
-<!--         - $h$ casa com $m$ -->
-<!--     - Se não -->
-<!--         - Se ela prefere $h$ ao seu parceiro atual $h'$ -->
-<!--             - $m$ dispensa $h$, que fica solteiro, e $m$ casa com $h'$ -->
 
-
-
-
-<!-- Para que cada um dos passos seja em tempo constante, é criada uma estrutura de lista para abrigar os homens solteiros e uma matriz para armazenar a posição dos homens no ranking de preferência de cada mulher. A lista possibilita que as operações de inserção e retirada de um solteiro ocorram em $O(1)$. A matriz com o ranking dos homens possibilita que a comparação do parceiro atual da mulher com o homem solteiro candidato ocorra em $O(1)$ também. Com isso, a complexidade do algoritmo é $O(n^2)$. -->
-
-
-
-<!-- \section{Avaliação da execução do algoritmo} -->
-
-<!-- A execução do algoritmo foi avaliada com três tipos de instâncias para 22 diferentes valores de n (número de elementos em cada grupo). -->
-
-<!-- $$n = \{ 5, 50, 100, 200, ..., 1000, 1500, ..., 3000, 4000, ..., 9000 \}$$ -->
-
-<!-- Os 3 tipos de instância são os seguintes:  -->
-
-<!-- - As que levam ao melhor caso de execução, ou seja, que exigem o menor número possível de passos, para um valor de $n$; -->
-
-<!-- - As que levam ao pior caso de execução, ou seja, que exigem o maior número possível de passos, para um valor de $n$; -->
-
-<!-- - Instâncias geradas aleatoriamente. -->
-
-
-<!-- O programa usado para realizar a avaliação empírica do algoritmo foi desenvolvido na linguagem C++, usando apenas as bibliotecas stdio.h e stdlib.h, para leitura e escrita em arquivos e no console, e chrono, para executar a medição dos tempos de execução. Para medição dos tempos de execução foi usado um computador com processador Intel i7-7700 com 3,6 GHz, sistema operacional Windows 10 64 bits. O programa foi compilado no Visual Studio 2017 sem configurações extras de otimização de velocidade. -->
-
-<!-- As instâncias adicionais foram geradas com a linguagem R, que também foi usada para geração deste relatório, juntamente com as bibliotecas tidyverse e RMarkdown. -->
-
-
-
-
-<!-- \subsection{Melhor caso} -->
-
-
-<!-- Na avaliação do melhor caso, foram usadas instâncias específicas, uma para cada valor de $n$. O algoritmo foi rodado 30 vezes para cada uma das instâncias. -->
-
-<!-- A Figura \ref{fig:melhor_passos} mostra o número de passos do loop princpal do algoritmo (após a preparação das estruturas). É possível ver que o número de passos neste melhor caso é exatamente igual ao número de elementos. -->
-
-
-<!-- A Figura \ref{fig:melhor_tempo} mostra o tempo em segundos pra cada número de elementos, nas 30 execuções. É possível perceber que o tempo aumenta de forma não linear. A Tabela \ref{reg:tempomelhor} mostra os coeficientes de uma regressão no formato $tempo = \alpha + n^\beta$, que foi estimada para $n > 1000$. É possível ver que o coeficiente $\beta$ se aproxima de 2. O tempo da ordem de $O(n^2)$ é justificado porque antes do loop há a inicialização da estrutura do ranking dos homens, que é feito em $O(n^2)$ passos. Como o número de passos mais pesado do loop principal é pequeno, estes passos de inicialização acabam dominando a execução. A Tabela \ref{tab:melhorcaso} mostra os dados deste melhor caso. -->
-
-
-
-<!-- ```{r message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- resultado0 <- read_csv("C:\\resultadoapa\\rodada_best_worse_1_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 0, id <= 395)  -->
-
-
-<!-- resultado1 <- read_csv("C:\\resultadoapa\\rodada_best_worse_10_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 0, id <= 395)  -->
-
-<!-- resultado2 <- read_csv("C:\\resultadoapa\\rodada_best_worse_19_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 0, id <= 395)  -->
-
-
-<!-- resultado3 <- read_csv("C:\\resultadoapa\\rodada_best_worse_27_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 0, id <= 395)  -->
-
-
-<!-- resultado <- bind_rows(resultado0, resultado1, resultado2, resultado3) %>%  -->
-<!--     mutate(id = cumsum(um)-1) %>%  -->
-<!--     mutate(rodada = id %/% 22 ) -->
-<!-- ``` -->
-
-
-<!-- ```{r figs2, fig.cap="\\label{fig:melhor_passos}Número de passos x número de elementos em cada grupo", paged.print=FALSE } -->
-<!-- ggplot(resultado) + -->
-<!--     geom_line(aes(x = n, y = passos, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = passos, group = rodada )) + -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000)) + -->
-<!--     scale_y_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), limits = c(0,10000), expand = expand_scale(0)) -->
-<!-- ``` -->
-
-
-<!-- ```{r figs, fig.cap="\\label{fig:melhor_tempo}Tempo de execução (segundos) x número de elementos em cada grupo", message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- ggplot(resultado) + -->
-<!--     geom_line(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_smooth(aes(x = n, y = tempo)) +      -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000)) + -->
-<!--     labs(y = "tempo(s)") -->
-
-
-
-
-
-
-
-<!-- ``` -->
-
-<!-- \newpage -->
-
-<!-- ```{r results='asis'} -->
-
-
-
-<!-- modelo <-  lm(log(tempo) ~ log(n), data = resultado %>% filter (n> 1000) ) -->
-
-<!-- texreg(modelo, custom.model.names = c("Regressão"), caption = "Regressão log-log: $tempo = \\alpha + n^\\beta$ ", custom.coef.names = c("$\\alpha$","$\\beta$"), label = "reg:tempomelhor") -->
-
-<!-- ``` -->
-
-
-
-
-
-<!-- ```{r results='asis'} -->
-
-<!-- tabela <- resultado %>%  -->
-<!--     group_by(n) %>%  -->
-<!--     summarise("Tempo médio (ms)" = mean(tempo*1000), "Passos médios" = as.integer(mean(passos)), "Tempo mediano (ms)" = median(tempo*1000), "Passos medianos" = as.integer(median(passos))) -->
-
-<!-- options(xtable.comment = FALSE) -->
-<!-- xtable(tabela, caption = "Dados das 30 execuções do melhor caso", label = "tab:melhorcaso" ) -->
-
-
-<!-- ``` -->
-
-
-
-
-<!-- \subsection{Pior caso} -->
-
-
-<!-- Na avaliação do pior caso, foram usadas instâncias específicas, uma para cada valor de $n$. O algoritmo foi rodado 30 vezes para cada uma das instâncias. -->
-
-<!-- A Figura \ref{fig:pior_passos} mostra o número de passos do loop princpal do algoritmo (após a preparação das estruturas). É possível ver que o número de passos neste pior caso evolui de forma não linear. A Tabela \ref{reg:tempomelhor} mostra os coeficientes de uma regressão no formato $tempo = \alpha + n^\beta$, que foi estimada para $n > 1000$. É possível ver que o coeficiente $\beta$ é exatamente 2, sugerindo complexidade $O(n^2)$. -->
-
-
-<!-- A Figura \ref{fig:pior_tempo} mostra o tempo em segundos pra cada número de elementos, nas 30 execuções. É possível perceber que o tempo aumenta de forma não linear. A Tabela \ref{reg:tempopior} mostra os coeficientes de uma regressão no formato $tempo = \alpha + n^\beta$, que foi estimada para $n > 1000$. É possível ver que o coeficiente $\beta$ é igual de 2, sugerindo complexidade $O(n^2)$. O coeficiente $\alpha$, porém, é menos negativo, o que quer dizer que o tempo de execução é maior neste caso. Realmente podemos observar que o tempo de execução é bem maior comparando as Tabelas \ref{tab:piorcaso} e  \ref{tab:melhorcaso}. -->
-
-
-
-
-<!-- ```{r message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- resultadop0 <- read_csv("C:\\resultadoapa\\rodada_best_worse_1_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 1, id <= 395)  -->
-
-
-<!-- resultadop1 <- read_csv("C:\\resultadoapa\\rodada_best_worse_10_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 1, id <= 395)  -->
-
-<!-- resultadop2 <- read_csv("C:\\resultadoapa\\rodada_best_worse_19_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 1, id <= 395)  -->
-
-
-<!-- resultadop3 <- read_csv("C:\\resultadoapa\\rodada_best_worse_27_a_30.csv", col_names = c("n", "tempo", "passos")) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)) %>%  -->
-<!--     filter(id %% 2 == 1, id <= 395)  -->
-
-
-<!-- resultadop <- bind_rows(resultadop0, resultadop1, resultadop2, resultadop3) %>%  -->
-<!--     mutate(id = cumsum(um)-1) %>%  -->
-<!--     mutate(rodada = id %/% 22 ) -->
-<!-- ``` -->
-
-
-<!-- ```{r figs3, fig.cap="\\label{fig:pior_passos}Número de passos x número de elementos em cada grupo", paged.print=FALSE } -->
-<!-- ggplot(resultadop) + -->
-<!--     geom_line(aes(x = n, y = passos, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = passos, group = rodada )) + -->
-<!--     geom_smooth(formula = y ~ poly(x, 2, raw = TRUE), method= "lm", aes(x = n, y = passos)) +      -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000))  -->
-<!-- ``` -->
-
-
-<!-- ```{r figs10, fig.cap="\\label{fig:pior_tempo}Tempo de execução (segundos) x número de elementos em cada grupo", message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- ggplot(resultadop) + -->
-<!--     geom_line(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_smooth(formula = y ~ poly(x, 2, raw = TRUE), method= "lm", aes(x = n, y = tempo)) +      -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000)) + -->
-<!--     labs(y = "tempo(s)") -->
-
-
-
-
-
-
-
-<!-- ``` -->
-
-<!-- \newpage -->
-
-
-<!-- ```{r results='asis'} -->
-
-
-
-<!-- modelopp <-  lm(log(passos) ~ log(n) , data = resultadop %>%  filter(n > 1000)  ) -->
-
-<!-- texreg(modelopp, custom.model.names = c("Regressão"), caption = "Regressão log-log: $passos = \\alpha + n^\\beta$ ", custom.coef.names = c("$\\alpha$","$\\beta$"), label = "reg:passospior") -->
-
-<!-- ``` -->
-
-
-
-<!-- ```{r results='asis'} -->
-
-
-
-<!-- modelopt <-  lm(log(tempo) ~ log(n) , data = resultadop %>%  filter(n > 1000)  ) -->
-
-<!-- texreg(modelopt, custom.model.names = c("Regressão"), caption = "Regressão log-log: $tempo = \\alpha + n^\\beta$ ", custom.coef.names = c("$\\alpha$","$\\beta$"), label = "reg:tempopior") -->
-
-<!-- ``` -->
-
-
-
-
-<!-- ```{r results='asis'} -->
-
-<!-- tabela <- resultadop %>%  -->
-<!--     group_by(n) %>%  -->
-<!--     summarise("Tempo médio (ms)" = mean(tempo*1000), "Passos médios" = as.integer(mean(passos)), "Tempo mediano (ms)" = median(tempo*1000), "Passos medianos" = as.integer(median(passos))) -->
-
-<!-- options(xtable.comment = FALSE) -->
-
-<!-- xtable(tabela, caption = "Dados das 30 execuções do pior caso", label = "tab:piorcaso", -->
-
-<!--        display = c("d","d","f","e","f","e")  -->
-<!--        ) -->
-
-
-<!-- ``` -->
-
-
-<!-- \subsection{Caso médio} -->
-
-
-<!-- Na avaliação do caso médio, foram usadas 30 instâncias geradas aleatoriamente para cada valor de $n$. O algoritmo foi rodado uma vez para cada uma das instâncias, gerando 30 execuções para cada valor de n. Neste caso, portanto, diferentemente dos anteriores, temos uma variação no número de passos, que passa a não ser mais determinístico. -->
-
-<!-- A Figura \ref{fig:ale_passos} mostra o número de passos do loop principal do algoritmo (após a preparação das estruturas). É possível ver que o número de passos neste pior caso evolui de forma quase linear. A Tabela \ref{reg:passosale} mostra os coeficientes de uma regressão no formato $tempo = \alpha + n^\beta$, que foi estimada para $n > 1000$. É possível ver que o coeficiente $\beta$ está perto 1,1, sugerindo complexidade do loop principal está perto de $O(n)$ para o caso médio. -->
-
-
-<!-- A Figura \ref{fig:ale_tempo} mostra o tempo em segundos pra cada número de elementos, nas 30 execuções. A Tabela \ref{reg:passosale} relativa à regressão do tempo mostra um coeficiente $\beta$ perto de 2 É possível perceber que o tempo aumenta de forma não linear. É possível reparar, também, olhando as Tabelas \ref{tab:melhorcaso}, \ref{tab:piorcaso} e \ref{tab:ale}, que o tempo de execução do caso médio está mais perto do tempo do melhor caso do que o do pior caso. -->
-
-
-
-
-<!-- ```{r message=FALSE, warning=FALSE, paged.print=FALSE} -->
-
-<!-- resultadoale1 <- read_csv("C:\\resultadoapa\\rodada_ale_1_a_7.csv", col_names = c("n", "tempo", "passos")) -->
-
-<!-- resultadoale2 <- read_csv("C:\\resultadoapa\\rodada_ale_8_a_15.csv", col_names = c("n", "tempo", "passos")) -->
-
-<!-- resultadoale3 <- read_csv("C:\\resultadoapa\\rodada_ale_16_a_22.csv", col_names = c("n", "tempo", "passos")) -->
-
-<!-- resultadoale4 <- read_csv("C:\\resultadoapa\\rodada_ale_23_a_30.csv", col_names = c("n", "tempo", "passos")) -->
-
-<!-- resultadoale <- bind_rows(resultadoale1, resultadoale2, resultadoale3, resultadoale4) %>%  -->
-<!--     mutate(um = 1) %>%  -->
-<!--     mutate(id = cumsum(um)-1) %>%  -->
-<!--     mutate(rodada = id %/% 22 ) -->
-
-<!-- ``` -->
-
-
-<!-- ```{r figs9, fig.cap="\\label{fig:ale_passos}Número de passos x número de elementos em cada grupo", message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- ggplot(resultadoale) + -->
-<!--     geom_line(aes(x = n, y = passos, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = passos, group = rodada )) + -->
-<!--     geom_smooth( aes(x = n, y = passos)) +      -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000))  -->
-<!-- ``` -->
-
-
-<!-- ```{r figs4, fig.cap="\\label{fig:ale_tempo}Tempo de execução (segundos) x número de elementos em cada grupo", message=FALSE, warning=FALSE, paged.print=FALSE} -->
-<!-- ggplot(resultadoale) + -->
-<!--     geom_line(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_point(aes(x = n, y = tempo, group = rodada )) + -->
-<!--     geom_smooth(formula = y ~ poly(x, 2, raw = TRUE), method= "lm", aes(x = n, y = tempo)) +      -->
-<!--     scale_x_continuous(breaks= c(0,1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000), expand = expand_scale(0), limits = c(0,10000)) + -->
-<!--     labs(y = "tempo(s)") -->
-
-
-
-
-
-
-
-<!-- ``` -->
-
-<!-- \newpage -->
-
-<!-- ```{r message=FALSE, warning=FALSE, paged.print=FALSE, results='asis'} -->
-
-
-
-<!-- modeloalep <-  lm(log(passos) ~ log(n) , data = resultadoale %>%  filter(n > 1000)  ) -->
-
-<!-- texreg(modeloalep, custom.model.names = c("Regressão"), caption = "Regressão log-log: $passos = \\alpha + n^\\beta$ ", custom.coef.names = c("$\\alpha$","$\\beta$"), label = "reg:passosale") -->
-
-<!-- ``` -->
-
-
-
-<!-- ```{r results='asis'} -->
-
-
-
-<!-- modeloalet <-  lm(log(tempo) ~ log(n) , data = resultadoale %>%  filter(n > 1000)  ) -->
-
-<!-- texreg(modeloalet, custom.model.names = c("Regressão"), caption = "Regressão log-log: $tempo = \\alpha + n^\\beta$ ", custom.coef.names = c("$\\alpha$","$\\beta$"), label = "reg:tempoale") -->
-
-<!-- ``` -->
-
-
-
-
-<!-- ```{r results='asis'} -->
-
-<!-- tabela <- resultadoale %>%  -->
-<!--     group_by(n) %>%  -->
-<!--     summarise("Tempo médio (ms)" = mean(tempo*1000), "Passos médios" = as.integer(mean(passos)), "Tempo mediano (ms)" = median(tempo*1000), "Passos medianos" = as.integer(median(passos))) -->
-
-<!-- options(xtable.comment = FALSE) -->
-
-<!-- xtable(tabela, caption = "Dados das 30 execuções do pior caso", label = "tab:ale", -->
-
-<!--        display = c("d","d","f","e","f","e")  -->
-<!--        ) -->
-
-
-<!-- ``` -->
-
-
-<!-- \section{Conclusões} -->
-
-
-<!-- Pudemos atestar que, conforme o esperado, a complexidade do algoritmo se mostra $O(n^2)$ na análise empírica. O tempo de execução segue $O(n^2)$ mesmo no melhor caso e no pior caso, apesar de a execução ser em tempos muito menores do que nas instâncias de pior caso. Isso acontece porque existe uma inicialização antes do loop principal que tem complexidade $O(n^2)$ mesmo no melhor caso e no caso médio. Esta inicialização acaba prevalecendo na análise do tempo asintótica em relação a $n$. -->
-
-<!-- A descoberta maisi interessante foi o ffato de que a execução do caso médio está muito mais perto do melhor caso do que do pior caso tanto em número de passos quanto em tempo de execução. -->
 
 
 
